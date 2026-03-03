@@ -5,6 +5,7 @@ pipeline {
         IMAGE_NAME   = 'laladog'
         CONTAINER    = 'laladog'
         HOST_PORT    = '4094'
+        ENV_FILE     = '/opt/envs/laladog/.env'
     }
 
     stages {
@@ -24,6 +25,7 @@ pipeline {
                         --name ${CONTAINER} \
                         --restart unless-stopped \
                         -p ${HOST_PORT}:80 \
+                        --env-file ${ENV_FILE} \
                         ${IMAGE_NAME}:latest
                 """
             }
