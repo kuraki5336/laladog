@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+/* === 自訂 Design Tokens === */
+@theme {
+  /* Primary 深藍色系 */
+  --color-primary-10: #F4FAFD;
+  --color-primary-20: #D6EAF5;
+  --color-primary-30: #A3CCE2;
+  --color-primary-40: #6FAECF;
+  --color-primary-50: #1A6B9A;
+  --color-primary: #00416A;
+  --color-primary-70: #003557;
+  --color-primary-80: #002A45;
+  --color-primary-90: #001E33;
+
+  /* Secondary 亮藍色系 */
+  --color-secondary-10: #E8F4FC;
+  --color-secondary-20: #C4E2F6;
+  --color-secondary-30: #8DC8ED;
+  --color-secondary-40: #5BB0E4;
+  --color-secondary: #3298DC;
+  --color-secondary-60: #2882C2;
+  --color-secondary-70: #1F6DA6;
+  --color-secondary-80: #17578A;
+  --color-secondary-90: #0E3F6B;
+
+  /* 功能色 */
+  --color-success: #4CAF50;
+  --color-success-light: #EDF7ED;
+  --color-warning: #FFC107;
+  --color-warning-light: #FFF8E1;
+  --color-danger: #E63946;
+  --color-danger-light: #FDECED;
+  --color-info: #3298DC;
+  --color-info-light: #E8F4FC;
+
+  /* 背景色 */
+  --color-bg-page: #F4FAFD;
+  --color-bg-card: #FFFFFF;
+  --color-bg-sidebar: #FFFFFF;
+  --color-bg-hover: #F1F5F9;
+  --color-bg-stripe: #F8FAFC;
+
+  /* 文字色 (Slate) */
+  --color-text-primary: #475569;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-placeholder: #CBD5E1;
+  --color-text-inverse: #FFFFFF;
+
+  /* 邊框色 */
+  --color-border: #E2E8F0;
+  --color-border-light: #F1F5F9;
+  --color-border-focus: #3298DC;
+
+  /* 圓角 */
+  --radius-card: 12px;
+  --radius-button: 8px;
+  --radius-tag: 6px;
+  --radius-sm: 4px;
+
+  /* 字體 */
+  --font-zh: "Noto Sans TC", sans-serif;
+  --font-en: "Rounded Mplus 1c", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* === 全域基底 === */
+body {
+  font-family: var(--font-zh), var(--font-en);
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* === 滾動條美化 === */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-text-placeholder);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
+}
+
+/* === 選取樣式 === */
+::selection {
+  background-color: var(--color-secondary-20);
+  color: var(--color-primary);
+}
+
+/* === 深色模式覆蓋 === */
+.dark {
+  --color-bg-page: #0F172A;
+  --color-bg-card: #1E293B;
+  --color-bg-sidebar: #1E293B;
+  --color-bg-hover: #334155;
+  --color-bg-stripe: #1E293B;
+
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #CBD5E1;
+  --color-text-muted: #64748B;
+  --color-text-placeholder: #475569;
+
+  --color-border: #334155;
+  --color-border-light: #1E293B;
+  --color-border-focus: #3298DC;
+
+  --color-success-light: #14532D;
+  --color-warning-light: #422006;
+  --color-danger-light: #450A0A;
+  --color-info-light: #0E3F6B;
+}
+
+.dark body,
+.dark {
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+
+/* 深色模式下輸入框 */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--color-text-muted);
+}
