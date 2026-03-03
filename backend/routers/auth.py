@@ -7,6 +7,7 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.security import create_access_token
 from backend.models.user import User
+from backend.models.team import TeamMember, PendingInvitation
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -71,12 +72,29 @@ async def google_login(body: GoogleTokenRequest, db: AsyncSession = Depends(get_
             user.picture = picture
             await db.commit()
 
+        # 處理 pending invitations：自動加入被邀請的團隊
+        result = await db.execute(
+            select(PendingInvitation).where(PendingInvitation.email == user.email)
+        )
+        pending_list = result.scalars().all()
+        joined_teams = 0
+        for inv in pending_list:
+            member = TeamMember(team_id=inv.team_id, user_id=user.id, role=inv.role)
+            db.add(member)
+            await db.delete(inv)
+            joined_teams += 1
+        if joined_teams > 0:
+            await db.commit()
+
         # 產生 JWT
         token = create_access_token({"sub": user.id, "email": user.email, "name": user.name})
 
         return TokenResponse(
             access_token=token,
-            user={"id": user.id, "email": user.email, "name": user.name, "picture": user.picture},
+            user={
+                "id": user.id, "email": user.email, "name": user.name, "picture": user.picture,
+                "joined_teams": joined_teams,
+            },
         )
     except HTTPException:
         raise

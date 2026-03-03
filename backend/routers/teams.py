@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from backend.core.database import get_db
 from backend.core.security import get_current_user
-from backend.models.team import Team, TeamMember
+from backend.models.team import Team, TeamMember, PendingInvitation
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -78,7 +78,7 @@ async def list_members(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出團隊所有成員（僅團隊成員可查看）"""
+    """列出團隊所有成員 + pending 邀請（僅團隊成員可查看）"""
     user_id = current_user["sub"]
 
     # 驗證呼叫者是團隊成員
@@ -104,7 +104,22 @@ async def list_members(
             "email": user.email,
             "name": user.name,
             "role": tm.role,
+            "status": "active",
         })
+
+    # 查詢 pending 邀請
+    result = await db.execute(
+        select(PendingInvitation).where(PendingInvitation.team_id == team_id)
+    )
+    for inv in result.scalars().all():
+        members.append({
+            "user_id": inv.id,  # 用 invitation id 作為識別
+            "email": inv.email,
+            "name": inv.email,  # 尚未註冊，用 email 顯示
+            "role": inv.role,
+            "status": "pending",
+        })
+
     return members
 
 
@@ -115,7 +130,7 @@ async def invite_member(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """邀請成員加入團隊（僅 owner 可操作）"""
+    """邀請成員加入團隊（僅 owner 可操作，未註冊用戶也可邀請）"""
     user_id = current_user["sub"]
 
     # 驗證權限
@@ -133,23 +148,41 @@ async def invite_member(
     from backend.models.user import User
     result = await db.execute(select(User).where(User.email == body.email))
     invitee = result.scalar_one_or_none()
-    if not invitee:
-        raise HTTPException(status_code=404, detail="User not found")
 
-    # 檢查是否已是成員
-    result = await db.execute(
-        select(TeamMember).where(
-            TeamMember.team_id == team_id, TeamMember.user_id == invitee.id
+    if invitee:
+        # 使用者已註冊 → 直接加入團隊
+        result = await db.execute(
+            select(TeamMember).where(
+                TeamMember.team_id == team_id, TeamMember.user_id == invitee.id
+            )
         )
-    )
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="User already in team")
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="User already in team")
 
-    member = TeamMember(team_id=team_id, user_id=invitee.id, role=body.role)
-    db.add(member)
-    await db.commit()
+        member = TeamMember(team_id=team_id, user_id=invitee.id, role=body.role)
+        db.add(member)
+        await db.commit()
+        return {"message": f"Invited {body.email} as {body.role}"}
+    else:
+        # 使用者未註冊 → 建立 pending invitation
+        result = await db.execute(
+            select(PendingInvitation).where(
+                PendingInvitation.team_id == team_id,
+                PendingInvitation.email == body.email,
+            )
+        )
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Invitation already sent")
 
-    return {"message": f"Invited {body.email} as {body.role}"}
+        invitation = PendingInvitation(
+            team_id=team_id,
+            email=body.email,
+            role=body.role,
+            invited_by=user_id,
+        )
+        db.add(invitation)
+        await db.commit()
+        return {"message": f"Invitation sent to {body.email} (pending registration)"}
 
 
 @router.delete("/{team_id}/members/{member_user_id}")
@@ -159,7 +192,7 @@ async def remove_member(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """移除成員（僅 owner 可操作）"""
+    """移除成員或取消 pending 邀請（僅 owner 可操作）"""
     user_id = current_user["sub"]
 
     result = await db.execute(
@@ -172,15 +205,29 @@ async def remove_member(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Only team owner can remove members")
 
+    # 先嘗試找已加入的成員
     result = await db.execute(
         select(TeamMember).where(
             TeamMember.team_id == team_id, TeamMember.user_id == member_user_id
         )
     )
     member = result.scalar_one_or_none()
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+    if member:
+        await db.delete(member)
+        await db.commit()
+        return {"message": "Member removed"}
 
-    await db.delete(member)
-    await db.commit()
-    return {"message": "Member removed"}
+    # 找不到成員，嘗試找 pending invitation（用 invitation id）
+    result = await db.execute(
+        select(PendingInvitation).where(
+            PendingInvitation.id == member_user_id,
+            PendingInvitation.team_id == team_id,
+        )
+    )
+    invitation = result.scalar_one_or_none()
+    if invitation:
+        await db.delete(invitation)
+        await db.commit()
+        return {"message": "Invitation cancelled"}
+
+    raise HTTPException(status_code=404, detail="Member not found")

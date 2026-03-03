@@ -149,8 +149,9 @@ async function handleRemove(userId: string) {
                 class="flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-bg-hover"
               >
                 <div>
-                  <span class="text-text-primary">{{ m.name || m.email }}</span>
+                  <span :class="m.status === 'pending' ? 'text-text-muted italic' : 'text-text-primary'">{{ m.name || m.email }}</span>
                   <span class="ml-2 text-text-muted">({{ m.role }})</span>
+                  <span v-if="m.status === 'pending'" class="ml-1 rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-600">pending</span>
                 </div>
                 <button
                   v-if="isOwner && m.role !== 'owner'"

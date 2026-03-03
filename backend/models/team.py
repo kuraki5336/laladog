@@ -30,6 +30,23 @@ class TeamMember(Base):
     )
 
 
+class PendingInvitation(Base):
+    __tablename__ = "pending_invitations"
+    __table_args__ = (
+        # 同一個 team 不能重複邀請同一個 email
+        {"sqlite_autoincrement": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    team_id: Mapped[str] = mapped_column(String, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    email: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False, default="viewer")
+    invited_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=True
+    )
+
+
 class SharedCollection(Base):
     __tablename__ = "shared_collections"
 
