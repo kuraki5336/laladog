@@ -74,13 +74,6 @@ function toggleMenu() {
   showMenu.value = !showMenu.value
 }
 
-// 點擊外部關閉
-function onClickOutside(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (!target.closest('.ws-menu-area')) {
-    showMenu.value = false
-  }
-}
 </script>
 
 <template>
