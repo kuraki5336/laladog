@@ -24,8 +24,12 @@ const activeWs = computed(() => wsStore.activeWorkspace)
 const teamId = computed(() => activeWs.value?.teamId)
 const isOwner = computed(() => {
   if (!teamId.value) return true // 尚未建立 team，當前用戶就是 owner
+  // 優先從 teams store 判斷
   const team = teamStore.teams.find(t => t.id === teamId.value)
-  return team?.role === 'owner'
+  if (team?.role) return team.role === 'owner'
+  // fallback: 從已載入的 members 判斷
+  const me = members.value.find(m => m.email === authStore.user?.email)
+  return me?.role === 'owner'
 })
 
 watch(() => props.open, async (isOpen) => {
@@ -33,7 +37,7 @@ watch(() => props.open, async (isOpen) => {
     inviteMsg.value = null
     inviteEmail.value = ''
     if (teamId.value) {
-      await loadMembers()
+      await Promise.all([teamStore.loadTeams(), loadMembers()])
     } else {
       members.value = []
     }
