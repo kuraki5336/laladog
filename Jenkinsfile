@@ -33,7 +33,7 @@ pipeline {
     }
 
     post {
-        success { echo "Deploy succeeded — download at http://<your-server>:${HOST_PORT}/downloads/" }
+        success { echo "Deploy succeeded — API at http://<your-server>:${HOST_PORT}" }
         failure { echo 'Deploy failed' }
     }
 }
