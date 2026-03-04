@@ -159,13 +159,13 @@ async function handleRemove(userId: string) {
                 class="flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-bg-hover"
               >
                 <div class="flex items-center gap-2">
-                  <span :class="m.status === 'pending' ? 'text-text-muted italic' : 'text-text-primary'">{{ m.name || m.email }}</span>
                   <span
                     class="rounded px-1.5 py-0.5 text-[10px] font-medium"
                     :class="roleBadge[m.role] || 'bg-gray-500/15 text-gray-500'"
                   >
                     {{ m.role }}
                   </span>
+                  <span :class="m.status === 'pending' ? 'text-text-muted italic' : 'text-text-primary'">{{ m.name || m.email }}</span>
                   <span v-if="m.status === 'pending'" class="rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-600">pending</span>
                 </div>
                 <button

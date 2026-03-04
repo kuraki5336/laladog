@@ -71,14 +71,18 @@ async function handleDelete() {
 
   if (ws.teamId) {
     // 雲端 workspace — 刪除整個團隊
+    if (!confirm('Are you sure you want to delete this team and all its data?')) return
     const ok = await teamStore.deleteTeam(ws.teamId)
     if (ok) {
       syncStore.disconnect()
       await wsStore.deleteWorkspace(ws.id)
+    } else {
+      alert(teamStore.error || 'Failed to delete team')
     }
   } else {
     // 地端 workspace
     if (wsStore.workspaces.length <= 1) return
+    if (!confirm('Are you sure you want to delete this workspace?')) return
     await wsStore.deleteWorkspace(ws.id)
   }
 }
@@ -88,10 +92,15 @@ async function handleLeave() {
   if (!ws?.teamId || !authStore.user) return
   showMenu.value = false
 
+  if (!confirm('Are you sure you want to leave this workspace?')) return
+
   const ok = await teamStore.leaveTeam(ws.teamId, authStore.user.id)
-  if (ok) {
+  if (ok || teamStore.error?.includes('Not a team member')) {
+    // 成功離開，或伺服器已無成員記錄 → 清除本地 workspace
     syncStore.disconnect()
     await wsStore.deleteWorkspace(ws.id)
+  } else {
+    alert(teamStore.error || 'Failed to leave team')
   }
 }
 
