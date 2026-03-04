@@ -114,6 +114,46 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (ws) ws.teamId = teamId
   }
 
+  /**
+   * 確保團隊成員本地有對應的 workspace
+   * 如果本地沒有 teamId 對應的 workspace → 自動建立一個
+   * 回傳 { teamId → workspaceId } mapping
+   */
+  async function ensureTeamWorkspaces(
+    teams: Array<{ id: string; name: string }>,
+  ): Promise<Map<string, string>> {
+    const mapping = new Map<string, string>()
+
+    for (const team of teams) {
+      // 看本地是否已有此 team 的 workspace
+      const existing = workspaces.value.find(w => w.teamId === team.id)
+      if (existing) {
+        mapping.set(team.id, existing.id)
+      } else {
+        // 本地沒有 → 建立
+        const id = crypto.randomUUID()
+        if (isTauri) {
+          const db = await getDb()
+          await db.execute(
+            'INSERT INTO workspaces (id, name, is_active, team_id) VALUES (?, ?, 0, ?)',
+            [id, team.name, team.id],
+          )
+        }
+        workspaces.value.push({
+          id,
+          name: team.name,
+          isActive: false,
+          teamId: team.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        mapping.set(team.id, id)
+      }
+    }
+
+    return mapping
+  }
+
   return {
     workspaces,
     activeWorkspace,
@@ -123,5 +163,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     renameWorkspace,
     deleteWorkspace,
     linkTeam,
+    ensureTeamWorkspaces,
   }
 })

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useCollectionStore } from '@/stores/collectionStore'
+import { useAuthStore } from '@/stores/authStore'
 import TeamMembersDialog from './TeamMembersDialog.vue'
 
 const wsStore = useWorkspaceStore()
+const collectionStore = useCollectionStore()
+const authStore = useAuthStore()
 const isAdding = ref(false)
 const showMembersDialog = ref(false)
 const newName = ref('')
@@ -11,13 +15,19 @@ const showMenu = ref(false)
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
 
-function handleSwitch(event: Event) {
+async function handleSwitch(event: Event) {
   const value = (event.target as HTMLSelectElement).value
   if (value === '__add__') {
     isAdding.value = true
     return
   }
-  wsStore.setActive(value)
+  await wsStore.setActive(value)
+
+  // 切換到 team workspace 時，從雲端拉取最新 collections
+  const ws = wsStore.workspaces.find(w => w.id === value)
+  if (ws?.teamId && authStore.isLoggedIn) {
+    await collectionStore.pullFromCloud(ws.teamId, ws.id)
+  }
 }
 
 async function handleAdd() {

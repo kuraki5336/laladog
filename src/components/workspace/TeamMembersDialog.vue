@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { useTeamStore } from '@/stores/teamStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useCollectionStore } from '@/stores/collectionStore'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -10,6 +11,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 const teamStore = useTeamStore()
 const wsStore = useWorkspaceStore()
 const authStore = useAuthStore()
+const collectionStore = useCollectionStore()
 
 const inviteEmail = ref('')
 const inviteRole = ref('editor')
@@ -58,7 +60,9 @@ async function handleShareWorkspace() {
   const team = await teamStore.createTeam(activeWs.value.name)
   if (team) {
     await wsStore.linkTeam(activeWs.value.id, team.id)
-    inviteMsg.value = 'Workspace shared! Now invite members.'
+    // 分享後立即將本地 collections 推送到雲端
+    await collectionStore.pushToCloud()
+    inviteMsg.value = 'Workspace shared & synced! Now invite members.'
   } else {
     shareError.value = teamStore.error || 'Failed to share workspace'
   }

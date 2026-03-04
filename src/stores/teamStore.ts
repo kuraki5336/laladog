@@ -1,15 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
-import { useAuthStore } from './authStore'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+import { apiCall } from '@/utils/api'
 
 interface TeamMember {
   user_id: string
   email: string
   name: string
   role: string
+  status?: string
 }
 
 interface Team {
@@ -18,28 +16,6 @@ interface Team {
   owner_id: string
   role: string
   members: TeamMember[]
-}
-
-interface ApiResponse {
-  status: number
-  body: string
-}
-
-/** Helper: call backend API through Rust proxy to avoid Tauri webview fetch restrictions */
-async function apiCall(method: string, path: string, body?: unknown): Promise<ApiResponse> {
-  const auth = useAuthStore()
-  const hdrs: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...auth.authHeaders(),
-  }
-  return invoke<ApiResponse>('api_request', {
-    request: {
-      method,
-      url: `${API_BASE}${path}`,
-      headers: hdrs,
-      body: body ? JSON.stringify(body) : null,
-    },
-  })
 }
 
 export const useTeamStore = defineStore('team', () => {

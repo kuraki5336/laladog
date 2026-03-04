@@ -9,16 +9,44 @@ import WorkspaceSelector from '@/components/workspace/WorkspaceSelector.vue'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useTeamStore } from '@/stores/teamStore'
+import { useCollectionStore } from '@/stores/collectionStore'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const wsStore = useWorkspaceStore()
+const teamStore = useTeamStore()
+const collectionStore = useCollectionStore()
 
-onMounted(() => {
+onMounted(async () => {
   themeStore.init()
   authStore.init()
-  wsStore.loadAll()
+  await wsStore.loadAll()
+  await collectionStore.loadAll()
+
+  // 已登入 → 同步團隊 collections
+  if (authStore.isLoggedIn) {
+    await syncTeamCollections()
+  }
 })
+
+/** 同步所有團隊的 shared collections 到本地 */
+async function syncTeamCollections() {
+  try {
+    await teamStore.loadTeams()
+    if (teamStore.teams.length === 0) return
+
+    // 確保每個 team 在本地都有 workspace
+    const mapping = await wsStore.ensureTeamWorkspaces(teamStore.teams)
+
+    // 對每個 team workspace 拉取雲端 collections
+    for (const [teamId, wsId] of mapping) {
+      await collectionStore.pullFromCloud(teamId, wsId)
+    }
+  } catch (e) {
+    console.error('[AppLayout] Team sync failed:', e)
+  }
+}
 </script>
 
 <template>
