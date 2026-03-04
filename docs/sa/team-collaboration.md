@@ -29,15 +29,17 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 | 編號 | 情境 | 角色 | 說明 |
 |------|------|------|------|
-| UC-01 | 建立團隊 | 已登入使用者 | 輸入團隊名稱，建立新團隊，建立者自動成為 Owner |
+| UC-01 | 建立團隊 | 已登入使用者 | 輸入團隊名稱，建立新團隊，建立者自動成為 Admin |
 | UC-02 | 檢視團隊列表 | 已登入使用者 | 列出使用者所屬的所有團隊及其角色 |
-| UC-03 | 邀請成員 | Owner | 透過 email 邀請已註冊使用者加入團隊，並指定角色 |
-| UC-04 | 移除成員 | Owner | 將指定成員從團隊中移除 |
-| UC-05 | 分享 Collection | Owner / Editor | 將本地 Collection 上傳至團隊空間 |
-| UC-06 | 檢視共享 Collection 列表 | 全部成員 | 列出團隊空間中所有已共享的 Collection |
-| UC-07 | 更新共享 Collection | Owner / Editor | 以本地最新版本覆寫團隊空間中的 Collection |
-| UC-08 | 刪除共享 Collection | Owner | 從團隊空間中刪除指定 Collection |
-| UC-09 | 未登入嘗試使用 | 未登入使用者 | 團隊協作功能不可見或不可用，提示需先登入 |
+| UC-03 | 邀請成員 | Admin | 透過 email 邀請使用者加入團隊，並指定角色（viewer / editor / admin），未註冊使用者可建立待確認邀請 |
+| UC-04 | 移除成員 | Admin | 將指定成員從團隊中移除，或取消 pending 邀請 |
+| UC-05 | 離開團隊 | 任何成員 | 成員自行離開團隊；Admin 離開前需確保至少還有一位其他 Admin |
+| UC-06 | 刪除團隊 | Admin | 刪除整個團隊，CASCADE 刪除所有成員、邀請與共享 Collection |
+| UC-07 | 分享 Collection | Admin / Editor | 將本地 Collection 上傳至團隊空間 |
+| UC-08 | 檢視共享 Collection 列表 | 全部成員 | 列出團隊空間中所有已共享的 Collection |
+| UC-09 | 更新共享 Collection | Admin / Editor | 以本地最新版本覆寫團隊空間中的 Collection |
+| UC-10 | 刪除共享 Collection | Admin | 從團隊空間中刪除指定 Collection |
+| UC-11 | 未登入嘗試使用 | 未登入使用者 | 團隊協作功能不可見或不可用，提示需先登入 |
 
 ---
 
@@ -93,7 +95,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | Teams                    [+ 建立]   |
 +-------------------------------------+
 | +--------------------------------+  |
-| | Team Alpha              Owner  |  |
+| | Team Alpha              Admin  |  |
 | | 3 members                      |  |
 | +--------------------------------+  |
 | +--------------------------------+  |
@@ -133,7 +135,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 成員 (3)                    [邀請]  |
 +-------------------------------------+
 | +--------------------------------+  |
-| | [Av] Alice     owner          |  |
+| | [Av] Alice     admin          |  |
 | +--------------------------------+  |
 | | [Av] Bob       editor    [X]  |  |
 | +--------------------------------+  |
@@ -222,7 +224,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 欄位 | 數據類型 | 語言切換 | 必填 | 檢核 | 佔位符 | 值 | 備註 |
 |------|----------|----------|------|------|--------|-----|------|
 | 團隊名稱 | string | -- | -- | -- | -- | `team.name` | 從 API 回傳 |
-| 使用者角色 | string | -- | -- | -- | -- | `Owner` / `Editor` / `Viewer` | 該使用者在此團隊中的角色 |
+| 使用者角色 | string | -- | -- | -- | -- | `Admin` / `Editor` / `Viewer` | 該使用者在此團隊中的角色 |
 | 成員數量 | string | -- | -- | -- | -- | `{n} members` | 團隊成員人數（選填顯示） |
 
 **卡片樣式規格：**
@@ -268,7 +270,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 欄位 | 數據類型 | 語言切換 | 必填 | 檢核 | 佔位符 | 值 | 備註 |
 |------|----------|----------|------|------|--------|-----|------|
 | 區域標題 | string | -- | -- | -- | -- | `成員 ({n})` | n = 成員人數 |
-| 邀請按鈕 | button | -- | -- | -- | -- | `邀請` | 僅 Owner 可見；點擊開啟邀請成員對話框 |
+| 邀請按鈕 | button | -- | -- | -- | -- | `邀請` | 僅 Admin 可見；點擊開啟邀請成員對話框 |
 
 #### 5.4.3 成員項目
 
@@ -276,8 +278,8 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 |------|----------|----------|------|------|--------|-----|------|
 | 成員頭像 | string (URL) | -- | 否 | -- | 預設頭像 | `member.picture` | 圓形，24x24px |
 | 成員名稱 | string | -- | -- | -- | -- | `member.name` | 成員顯示名稱 |
-| 成員角色 | string | -- | -- | -- | -- | `owner` / `editor` / `viewer` | 以小寫標籤形式顯示 |
-| 移除按鈕 | button | -- | -- | -- | -- | `X` 或垃圾桶圖示 | 僅 Owner 可見；不可移除自己（Owner）；點擊呼叫 `DELETE /teams/{team_id}/members/{user_id}` |
+| 成員角色 | string | -- | -- | -- | -- | `admin` / `editor` / `viewer` | 以標籤形式顯示，依角色上色（admin=藍、editor=綠、viewer=灰） |
+| 移除按鈕 | button | -- | -- | -- | -- | `X` 或垃圾桶圖示 | 僅 Admin 可見；不顯示於 admin 角色成員旁；點擊呼叫 `DELETE /teams/{team_id}/members/{user_id}` |
 
 ### 5.5 邀請成員對話框
 
@@ -295,8 +297,9 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 | 選項值 | 顯示文字 | 說明 |
 |--------|----------|------|
-| `editor` | Editor | 可同步 Collection 至團隊 |
 | `viewer` | Viewer | 僅可檢視共享 Collection（預設值） |
+| `editor` | Editor | 可編輯 Collection 與同步至團隊 |
+| `admin` | Admin | 完整管理權限，可邀請/移除成員、刪除團隊 |
 
 ### 5.6 團隊詳情面板 — 共享 Collection 列表
 
@@ -305,7 +308,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 欄位 | 數據類型 | 語言切換 | 必填 | 檢核 | 佔位符 | 值 | 備註 |
 |------|----------|----------|------|------|--------|-----|------|
 | 區域標題 | string | -- | -- | -- | -- | `共享 Collections ({n})` | n = 共享 Collection 數量 |
-| 同步按鈕 | button | -- | -- | -- | -- | `同步` 或上傳圖示 | 僅 Owner / Editor 可見；點擊開啟同步 Collection 對話框 |
+| 同步按鈕 | button | -- | -- | -- | -- | `同步` 或上傳圖示 | 僅 Admin / Editor 可見；點擊開啟同步 Collection 對話框 |
 
 #### 5.6.2 共享 Collection 項目
 
@@ -314,8 +317,8 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | Collection 名稱 | string | -- | -- | -- | -- | `collection.name` | 共享 Collection 的名稱 |
 | 更新者 | string | -- | -- | -- | -- | `更新者: {user_name}` | 最後更新此 Collection 的使用者名稱 |
 | 更新時間 | string | -- | -- | -- | -- | `YYYY-MM-DD` | `collection.updated_at` 格式化顯示 |
-| 更新按鈕 | button | -- | -- | -- | -- | `更新` | 僅 Owner / Editor 可見；呼叫 `PUT /sync/collections/{id}` |
-| 刪除按鈕 | button | -- | -- | -- | -- | `刪除` | 僅 Owner 可見；呼叫 `DELETE /sync/collections/{id}`；需二次確認 |
+| 更新按鈕 | button | -- | -- | -- | -- | `更新` | 僅 Admin / Editor 可見；呼叫 `PUT /sync/collections/{id}` |
+| 刪除按鈕 | button | -- | -- | -- | -- | `刪除` | 僅 Admin 可見；呼叫 `DELETE /sync/collections/{id}`；需二次確認 |
 
 ### 5.7 同步 Collection 對話框
 
@@ -347,7 +350,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
   |                      |  5. POST /teams         |
   |                      |  { name: "Team Alpha" } |
   |                      |----------------------->|
-  |                      |  6. 建立 Team + TeamMember(owner) |
+  |                      |  6. 建立 Team + TeamMember(admin) |
   |                      |  7. 回傳 TeamResponse   |
   |                      |<-----------------------|
   |  8. 關閉對話框       |                        |
@@ -358,13 +361,13 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 ### 6.2 邀請成員
 
 ```
-使用者 (Owner)          前端                    FastAPI 後端
+使用者 (Admin)          前端                    FastAPI 後端
   |                      |                        |
   |  1. 點擊 [邀請]      |                        |
   |--------------------->|                        |
   |  2. 開啟邀請對話框   |                        |
   |<---------------------|                        |
-  |  3. 輸入 email + 選擇角色                     |
+  |  3. 輸入 email + 選擇角色（viewer/editor/admin）|
   |--------------------->|                        |
   |  4. 點擊 [邀請]      |                        |
   |--------------------->|                        |
@@ -372,11 +375,11 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
   |                      |  { email, role }       |
   |                      |----------------------->|
   |                      |  6. 查找使用者          |
-  |                      |  7. 檢查重複            |
-  |                      |  8. 新增 TeamMember     |
+  |                      |  7a. 已註冊：檢查重複 → 新增 TeamMember |
+  |                      |  7b. 未註冊：建立 PendingInvitation |
   |                      |<-----------------------|
-  |  9. 關閉對話框       |                        |
-  |  10. 刷新成員列表    |                        |
+  |  8. 關閉對話框       |                        |
+  |  9. 刷新成員列表     |                        |
   |<---------------------|                        |
 ```
 
@@ -384,14 +387,14 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 | 錯誤情境 | HTTP 狀態碼 | 前端處理 |
 |----------|-------------|----------|
-| 非 Owner 操作 | 403 | 顯示「僅團隊擁有者可邀請成員」提示 |
-| 受邀者未註冊 | 404 | 顯示「找不到該使用者，對方需先使用 Google 登入 LalaDog」提示 |
+| 非 Admin 操作 | 403 | 顯示「僅管理員可邀請成員」提示 |
 | 已是團隊成員 | 409 | 顯示「該使用者已是團隊成員」提示 |
+| 已有待確認邀請 | 409 | 顯示「邀請已送出」提示 |
 
 ### 6.3 移除成員
 
 ```
-使用者 (Owner)          前端                    FastAPI 後端
+使用者 (Admin)          前端                    FastAPI 後端
   |                      |                        |
   |  1. 點擊成員旁 [X]   |                        |
   |--------------------->|                        |
@@ -401,17 +404,60 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
   |--------------------->|                        |
   |                      |  4. DELETE /teams/{team_id}/members/{user_id} |
   |                      |----------------------->|
-  |                      |  5. 驗證 Owner 權限     |
-  |                      |  6. 刪除 TeamMember     |
+  |                      |  5. 驗證 Admin 權限     |
+  |                      |  6. 刪除 TeamMember 或 PendingInvitation |
   |                      |<-----------------------|
   |  7. 刷新成員列表     |                        |
   |<---------------------|                        |
 ```
 
-### 6.4 分享 Collection
+### 6.4 離開團隊
 
 ```
-使用者 (Editor+)        前端                    FastAPI 後端
+使用者（任何角色）      前端                    FastAPI 後端
+  |                      |                        |
+  |  1. 點擊 [Leave]     |                        |
+  |--------------------->|                        |
+  |  2. 顯示確認提示     |                        |
+  |<---------------------|                        |
+  |  3. 確認離開         |                        |
+  |--------------------->|                        |
+  |                      |  4. DELETE /teams/{team_id}/members/{自己的user_id} |
+  |                      |----------------------->|
+  |                      |  5. 判斷 is_self = true |
+  |                      |  6. 若為 admin 檢查是否有其他 admin |
+  |                      |  7. 刪除自己的 TeamMember |
+  |                      |<-----------------------|
+  |  8. 移除本地工作區   |                        |
+  |  9. 切換至其他工作區 |                        |
+  |<---------------------|                        |
+```
+
+### 6.5 刪除團隊
+
+```
+使用者 (Admin)          前端                    FastAPI 後端
+  |                      |                        |
+  |  1. 點擊 [Delete]    |                        |
+  |--------------------->|                        |
+  |  2. 顯示確認對話框   |                        |
+  |<---------------------|                        |
+  |  3. 確認刪除         |                        |
+  |--------------------->|                        |
+  |                      |  4. DELETE /teams/{team_id} |
+  |                      |----------------------->|
+  |                      |  5. 驗證 Admin 權限     |
+  |                      |  6. 刪除 Team（CASCADE 刪除成員、邀請、Collection）|
+  |                      |<-----------------------|
+  |  7. 移除本地工作區   |                        |
+  |  8. 切換至其他工作區 |                        |
+  |<---------------------|                        |
+```
+
+### 6.6 分享 Collection
+
+```
+使用者 (Admin/Editor)        前端                    FastAPI 後端
   |                      |                        |
   |  1. 點擊 [同步]      |                        |
   |--------------------->|                        |
@@ -425,7 +471,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
   |                      |  6. POST /sync/collections     |
   |                      |  { team_id, name, data }       |
   |                      |----------------------->|
-  |                      |  7. 驗證 editor+ 權限   |
+  |                      |  7. 驗證 admin/editor 權限   |
   |                      |  8. 儲存 SharedCollection|
   |                      |<-----------------------|
   |  9. 關閉對話框       |                        |
@@ -436,7 +482,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 ### 6.5 更新共享 Collection
 
 ```
-使用者 (Editor+)        前端                    FastAPI 後端
+使用者 (Admin/Editor)        前端                    FastAPI 後端
   |                      |                        |
   |  1. 點擊 [更新]      |                        |
   |--------------------->|                        |
@@ -448,17 +494,17 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
   |                      |  5. PUT /sync/collections/{id}  |
   |                      |  { team_id, name, data }        |
   |                      |----------------------->|
-  |                      |  6. 驗證 editor+ 權限   |
+  |                      |  6. 驗證 admin/editor 權限   |
   |                      |  7. 更新 SharedCollection|
   |                      |<-----------------------|
   |  8. 刷新共享 Collection 列表                   |
   |<---------------------|                        |
 ```
 
-### 6.6 刪除共享 Collection
+### 6.9 刪除共享 Collection
 
 ```
-使用者 (Owner)          前端                    FastAPI 後端
+使用者 (Admin)          前端                    FastAPI 後端
   |                      |                        |
   |  1. 點擊 [刪除]      |                        |
   |--------------------->|                        |
@@ -469,7 +515,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
   |--------------------->|                        |
   |                      |  4. DELETE /sync/collections/{id} |
   |                      |----------------------->|
-  |                      |  5. 驗證 Owner 權限     |
+  |                      |  5. 驗證 Admin 權限     |
   |                      |  6. 刪除 SharedCollection|
   |                      |<-----------------------|
   |  7. 刷新共享 Collection 列表                   |
@@ -489,12 +535,15 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 ### 7.2 團隊角色權限矩陣
 
-| 操作 | Owner | Editor | Viewer |
+| 操作 | Admin | Editor | Viewer |
 |------|:-----:|:------:|:------:|
 | 檢視團隊資訊 | O | O | O |
 | 檢視成員列表 | O | O | O |
 | 邀請成員 | O | X | X |
 | 移除成員 | O | X | X |
+| 離開團隊 | O（需有其他 Admin） | O | O |
+| 刪除團隊 | O | X | X |
+| 新增/編輯 Collection | O | O | X |
 | 檢視共享 Collection | O | O | O |
 | 分享 Collection（上傳） | O | O | X |
 | 更新共享 Collection | O | O | X |
@@ -502,13 +551,18 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 ### 7.3 UI 元素可見性規則
 
-| UI 元素 | Owner | Editor | Viewer |
+| UI 元素 | Admin | Editor | Viewer |
 |---------|:-----:|:------:|:------:|
 | [邀請] 按鈕 | 可見 | 隱藏 | 隱藏 |
-| 成員 [X] 移除按鈕 | 可見（自己除外） | 隱藏 | 隱藏 |
+| 成員 [X] 移除按鈕 | 可見（admin 成員除外） | 隱藏 | 隱藏 |
 | [同步] 分享按鈕 | 可見 | 可見 | 隱藏 |
 | Collection [更新] 按鈕 | 可見 | 可見 | 隱藏 |
 | Collection [刪除] 按鈕 | 可見 | 隱藏 | 隱藏 |
+| Workspace [Delete] 選項 | 可見 | 隱藏 | 隱藏 |
+| Workspace [Leave] 選項 | 隱藏 | 可見 | 可見 |
+| Workspace [Rename] 選項 | 可見 | 隱藏 | 隱藏 |
+| Collection 新增/匯入按鈕 | 可見 | 可見 | 隱藏 |
+| Collection 右鍵選單 | 可見 | 可見 | 隱藏 |
 
 ---
 
@@ -533,7 +587,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
     "id": "uuid",
     "name": "Team Alpha",
     "owner_id": "uuid",
-    "role": "owner",
+    "role": "admin",
     "members": []
   }
 ]
@@ -571,8 +625,8 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 路徑 | `/teams/{team_id}/invite` |
 | 方法 | POST |
 | 認證 | Bearer Token（JWT） |
-| 權限 | 僅 Owner |
-| 說明 | 邀請成員加入團隊 |
+| 權限 | 僅 Admin |
+| 說明 | 邀請成員加入團隊（已註冊直接加入，未註冊建立待確認邀請） |
 
 **Path Parameters：**
 
@@ -584,16 +638,16 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 | 欄位 | 數據類型 | 必填 | 說明 |
 |------|----------|------|------|
-| email | string | 是 | 受邀者的 email（必須已註冊） |
-| role | string | 否 | 角色，預設 `"viewer"`，可選 `"editor"` / `"viewer"` |
+| email | string | 是 | 受邀者的 email |
+| role | string | 否 | 角色，預設 `"viewer"`，可選 `"viewer"` / `"editor"` / `"admin"` |
 
 **錯誤回應：**
 
 | HTTP 狀態碼 | 說明 |
 |-------------|------|
-| 403 | 非 Owner 操作 |
-| 404 | 受邀者 email 未註冊 |
-| 409 | 受邀者已是團隊成員 |
+| 400 | 角色值不合法 |
+| 403 | 非 Admin 操作 |
+| 409 | 受邀者已是團隊成員或已有待確認邀請 |
 
 #### DELETE /teams/{team_id}/members/{member_user_id}
 
@@ -602,22 +656,46 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 路徑 | `/teams/{team_id}/members/{member_user_id}` |
 | 方法 | DELETE |
 | 認證 | Bearer Token（JWT） |
-| 權限 | 僅 Owner |
-| 說明 | 移除團隊成員 |
+| 權限 | 移除他人需 Admin；移除自己（離開）任何角色皆可 |
+| 說明 | 移除團隊成員、取消 pending 邀請、或離開團隊 |
 
 **Path Parameters：**
 
 | 參數 | 數據類型 | 說明 |
 |------|----------|------|
 | team_id | string (UUID) | 團隊 ID |
-| member_user_id | string (UUID) | 要移除的成員 User ID |
+| member_user_id | string (UUID) | 要移除的成員 User ID（傳入自己的 ID 即為離開） |
 
 **錯誤回應：**
 
 | HTTP 狀態碼 | 說明 |
 |-------------|------|
-| 403 | 非 Owner 操作 |
+| 400 | Admin 離開但無其他 Admin |
+| 403 | 非 Admin 嘗試移除他人 |
 | 404 | 成員不存在 |
+
+#### DELETE /teams/{team_id}
+
+| 項目 | 說明 |
+|------|------|
+| 路徑 | `/teams/{team_id}` |
+| 方法 | DELETE |
+| 認證 | Bearer Token（JWT） |
+| 權限 | 僅 Admin |
+| 說明 | 刪除整個團隊（CASCADE 刪除成員、邀請、共享 Collection） |
+
+**Path Parameters：**
+
+| 參數 | 數據類型 | 說明 |
+|------|----------|------|
+| team_id | string (UUID) | 團隊 ID |
+
+**錯誤回應：**
+
+| HTTP 狀態碼 | 說明 |
+|-------------|------|
+| 403 | 非 Admin 操作 |
+| 404 | 團隊不存在 |
 
 ### 8.2 Collection 同步
 
@@ -649,7 +727,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 路徑 | `/sync/collections` |
 | 方法 | POST |
 | 認證 | Bearer Token（JWT） |
-| 權限 | Owner / Editor |
+| 權限 | Admin / Editor |
 | 說明 | 上傳 Collection 至團隊 |
 
 **Request Body：**
@@ -667,7 +745,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 路徑 | `/sync/collections/{collection_id}` |
 | 方法 | PUT |
 | 認證 | Bearer Token（JWT） |
-| 權限 | Owner / Editor |
+| 權限 | Admin / Editor |
 | 說明 | 更新共享 Collection |
 
 **Request Body：** 同 POST /sync/collections
@@ -679,7 +757,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | 路徑 | `/sync/collections/{collection_id}` |
 | 方法 | DELETE |
 | 認證 | Bearer Token（JWT） |
-| 權限 | 僅 Owner |
+| 權限 | 僅 Admin |
 | 說明 | 刪除共享 Collection |
 
 **錯誤回應：**
@@ -709,7 +787,7 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 | id | string (UUID) | PK, auto-generated | 成員記錄主鍵 |
 | team_id | string (UUID) | FK → teams.id (CASCADE), NOT NULL | 所屬團隊 |
 | user_id | string (UUID) | FK → users.id, NOT NULL | 使用者 |
-| role | string | NOT NULL, default="viewer" | 角色：`owner` / `editor` / `viewer` |
+| role | string | NOT NULL, default="viewer" | 角色：`admin` / `editor` / `viewer` |
 | joined_at | datetime | NOT NULL, auto | 加入時間（UTC） |
 
 ### 9.3 SharedCollections 表
@@ -729,8 +807,9 @@ LalaDog 採用本地優先（Local-first）架構，所有 API Collection 主要
 
 1. **本地優先架構**：所有 Collection 的主要儲存位置為本地端（由 `collectionStore` 管理），團隊共享功能為「按需同步」機制，使用者需手動選擇要分享的 Collection。
 2. **同步方向**：目前僅支援「本地 -> 後端」的單向上傳；團隊成員可檢視共享 Collection 的資料，但「後端 -> 本地」的下載匯入功能為後續擴充項目。
-3. **邀請機制限制**：目前邀請成員需受邀者已使用 Google 登入 LalaDog 並完成註冊，系統透過 email 查找已存在的使用者記錄，不支援對未註冊使用者發送邀請信。
+3. **邀請機制**：支援已註冊與未註冊使用者。已註冊使用者直接加入團隊；未註冊使用者建立 `PendingInvitation` 記錄，待對方註冊後自動加入。
 4. **角色不可變更**：目前 API 不支援成員角色變更，若需調整角色需先移除再重新邀請。
-5. **團隊刪除**：目前 API 未提供團隊刪除端點，`teams` 表與 `team_members`、`shared_collections` 表之間設有 CASCADE 刪除約束，未來可擴充。
-6. **Collection 資料格式**：`data` 欄位儲存的是本地 Collection 樹狀結構的完整 JSON 序列化字串，包含所有 Request、Folder 等子項目。
-7. **後端 API 基底位址**：與認證功能共用，硬編碼為 `http://localhost:8000`。
+5. **團隊刪除**：`DELETE /teams/{team_id}` 僅 Admin 可操作，`teams` 表與 `team_members`、`pending_invitations`、`shared_collections` 表之間設有 CASCADE 刪除約束。
+6. **離開團隊**：任何成員可自行離開團隊。若 Admin 離開前必須確保團隊中至少還有一位其他 Admin，否則需先指派或刪除團隊。
+7. **Collection 資料格式**：`data` 欄位儲存的是本地 Collection 樹狀結構的完整 JSON 序列化字串，包含所有 Request、Folder 等子項目。
+8. **Viewer 限制**：Viewer 角色在前端隱藏 Collection 新增/匯入按鈕與右鍵選單，但仍可發送 API 請求進行測試。

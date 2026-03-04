@@ -7,6 +7,7 @@ import { useRequestStore } from '@/stores/requestStore'
 const props = defineProps<{
   node: CollectionNode
   depth: number
+  canEdit: boolean
 }>()
 
 const store = useCollectionStore()
@@ -65,7 +66,9 @@ async function addChild(type: 'folder' | 'request') {
 
 function handleContextMenu(e: MouseEvent) {
   e.preventDefault()
-  showContextMenu.value = !showContextMenu.value
+  if (props.canEdit) {
+    showContextMenu.value = !showContextMenu.value
+  }
 }
 </script>
 
@@ -113,8 +116,9 @@ function handleContextMenu(e: MouseEvent) {
       />
       <span v-else class="flex-1 truncate text-text-primary">{{ node.name }}</span>
 
-      <!-- Context Menu Trigger -->
+      <!-- Context Menu Trigger（僅可編輯時顯示） -->
       <button
+        v-if="canEdit"
         class="shrink-0 px-1 text-text-muted opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-100"
         @click.stop="showContextMenu = !showContextMenu"
       >
@@ -122,9 +126,9 @@ function handleContextMenu(e: MouseEvent) {
       </button>
     </div>
 
-    <!-- Context Menu -->
+    <!-- Context Menu（僅可編輯時顯示） -->
     <div
-      v-if="showContextMenu"
+      v-if="showContextMenu && canEdit"
       class="ml-4 rounded-sm border border-border bg-bg-card py-1 shadow-md"
       :style="{ marginLeft: `${depth * 16 + 20}px` }"
     >
@@ -183,6 +187,7 @@ function handleContextMenu(e: MouseEvent) {
         :key="child.id"
         :node="child"
         :depth="depth + 1"
+        :can-edit="canEdit"
       />
     </div>
   </div>

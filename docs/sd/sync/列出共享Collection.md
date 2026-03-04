@@ -117,7 +117,7 @@ if not result.scalar_one_or_none():
     raise HTTPException(status_code=403, detail="Not a team member")
 ```
 
-- 僅檢查是否為團隊成員，不限制角色（owner / editor / viewer 皆可）
+- 僅檢查是否為團隊成員，不限制角色（admin / editor / viewer 皆可）
 
 ---
 
@@ -136,7 +136,7 @@ if not result.scalar_one_or_none():
 
 | # | 測試案例                              | 預期結果                               |
 | - | ------------------------------------- | -------------------------------------- |
-| 1 | owner 角色列出團隊的 Collection       | 200，回傳該團隊所有 Collection 陣列     |
+| 1 | admin 角色列出團隊的 Collection       | 200，回傳該團隊所有 Collection 陣列     |
 | 2 | editor 角色列出團隊的 Collection      | 200，回傳該團隊所有 Collection 陣列     |
 | 3 | viewer 角色列出團隊的 Collection      | 200，回傳該團隊所有 Collection 陣列     |
 | 4 | 團隊無任何 Collection                 | 200，回傳空陣列 `[]`                   |

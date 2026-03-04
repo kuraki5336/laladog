@@ -77,7 +77,7 @@ async def sync_collection(
         select(TeamMember).where(
             TeamMember.team_id == body.team_id,
             TeamMember.user_id == user_id,
-            TeamMember.role.in_(["owner", "editor"]),
+            TeamMember.role.in_(["admin", "editor"]),
         )
     )
     if not result.scalar_one_or_none():
@@ -118,7 +118,7 @@ async def update_shared_collection(
         select(TeamMember).where(
             TeamMember.team_id == body.team_id,
             TeamMember.user_id == user_id,
-            TeamMember.role.in_(["owner", "editor"]),
+            TeamMember.role.in_(["admin", "editor"]),
         )
     )
     if not result.scalar_one_or_none():
@@ -153,7 +153,7 @@ async def delete_shared_collection(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """刪除共享 Collection（僅 owner）"""
+    """刪除共享 Collection（僅 admin）"""
     user_id = current_user["sub"]
 
     result = await db.execute(
@@ -163,16 +163,16 @@ async def delete_shared_collection(
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    # 驗證 owner
+    # 驗證 admin
     result = await db.execute(
         select(TeamMember).where(
             TeamMember.team_id == collection.team_id,
             TeamMember.user_id == user_id,
-            TeamMember.role == "owner",
+            TeamMember.role == "admin",
         )
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Only owner can delete")
+        raise HTTPException(status_code=403, detail="Only admin can delete")
 
     await db.delete(collection)
     await db.commit()

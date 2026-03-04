@@ -17,13 +17,13 @@
 | 資料表              | 用途                                            |
 | ------------------- | ----------------------------------------------- |
 | shared_collections  | 新增一筆共享 Collection 記錄                    |
-| team_members        | 驗證當前使用者是否為該團隊的 editor 或 owner    |
+| team_members        | 驗證當前使用者是否為該團隊的 admin 或 editor    |
 
 ---
 
 ## API 總覽
 
-上傳（建立）一個新的共享 Collection 到指定團隊。需要 JWT 認證，且當前使用者在該團隊的角色必須為 `editor` 或 `owner`。
+上傳（建立）一個新的共享 Collection 到指定團隊。需要 JWT 認證，且當前使用者在該團隊的角色必須為 `admin` 或 `editor`。
 
 ---
 
@@ -105,7 +105,7 @@ POST /sync/collections
 ### 處理流程
 
 1. 從 JWT token 中取得當前使用者 ID（`current_user["sub"]`）
-2. 查詢 `team_members` 資料表，驗證該使用者在指定 `team_id` 中的角色為 `owner` 或 `editor`
+2. 查詢 `team_members` 資料表，驗證該使用者在指定 `team_id` 中的角色為 `admin` 或 `editor`
 3. 若角色不符（viewer 或非成員），回傳 403 錯誤
 4. 建立新的 `SharedCollection` 記錄：
    - `id`：自動產生 UUID
@@ -127,11 +127,11 @@ result = await db.execute(
     select(TeamMember).where(
         TeamMember.team_id == body.team_id,
         TeamMember.user_id == user_id,
-        TeamMember.role.in_(["owner", "editor"]),
+        TeamMember.role.in_(["admin", "editor"]),
     )
 )
 if not result.scalar_one_or_none():
-    raise HTTPException(status_code=403, detail="Requires editor or owner role")
+    raise HTTPException(status_code=403, detail="Requires editor or admin role")
 ```
 
 - 同時驗證成員資格與角色，viewer 或非成員皆會被拒絕
@@ -143,7 +143,7 @@ if not result.scalar_one_or_none():
 | HTTP 狀態碼 | 錯誤訊息                       | 觸發條件                                    |
 | ----------- | ------------------------------ | ------------------------------------------- |
 | 401         | Unauthorized                   | 未提供或無效的 JWT token                    |
-| 403         | Requires editor or owner role  | 使用者不是團隊成員，或角色為 viewer         |
+| 403         | Requires editor or admin role  | 使用者不是團隊成員，或角色為 viewer         |
 | 422         | Validation Error               | Request Body 格式錯誤或缺少必填欄位         |
 
 ---
@@ -154,7 +154,7 @@ if not result.scalar_one_or_none():
 
 | # | 測試案例                                     | 預期結果                                    |
 | - | -------------------------------------------- | ------------------------------------------- |
-| 1 | owner 角色上傳新 Collection                  | 200，回傳新建立的 Collection 完整資料        |
+| 1 | admin 角色上傳新 Collection                  | 200，回傳新建立的 Collection 完整資料        |
 | 2 | editor 角色上傳新 Collection                 | 200，回傳新建立的 Collection 完整資料        |
 | 3 | data 為空 JSON 物件字串 `"{}"`               | 200，成功建立                                |
 | 4 | data 為包含巢狀結構的大型 JSON 字串          | 200，成功建立                                |
@@ -165,8 +165,8 @@ if not result.scalar_one_or_none():
 | - | -------------------------------------------- | ------------------------------------------- |
 | 1 | 未攜帶 JWT token                             | 401 Unauthorized                            |
 | 2 | JWT token 過期或無效                         | 401 Unauthorized                            |
-| 3 | viewer 角色嘗試上傳                          | 403 Requires editor or owner role           |
-| 4 | 非團隊成員嘗試上傳                           | 403 Requires editor or owner role           |
+| 3 | viewer 角色嘗試上傳                          | 403 Requires editor or admin role           |
+| 4 | 非團隊成員嘗試上傳                           | 403 Requires editor or admin role           |
 | 5 | Request Body 缺少 `name` 欄位               | 422 Validation Error                        |
 | 6 | Request Body 缺少 `team_id` 欄位            | 422 Validation Error                        |
 | 7 | Request Body 缺少 `data` 欄位               | 422 Validation Error                        |

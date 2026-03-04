@@ -14,7 +14,7 @@ const authStore = useAuthStore()
 const collectionStore = useCollectionStore()
 
 const inviteEmail = ref('')
-const inviteRole = ref('editor')
+const inviteRole = ref('viewer')
 const inviteLoading = ref(false)
 const inviteMsg = ref<string | null>(null)
 const shareLoading = ref(false)
@@ -24,15 +24,21 @@ const loadingMembers = ref(false)
 
 const activeWs = computed(() => wsStore.activeWorkspace)
 const teamId = computed(() => activeWs.value?.teamId)
-const isOwner = computed(() => {
-  if (!teamId.value) return true // 尚未建立 team，當前用戶就是 owner
+const isAdmin = computed(() => {
+  if (!teamId.value) return true // 尚未建立 team，當前用戶就是建立者
   // 優先從 teams store 判斷
   const team = teamStore.teams.find(t => t.id === teamId.value)
-  if (team?.role) return team.role === 'owner'
+  if (team?.role) return team.role === 'admin'
   // fallback: 從已載入的 members 判斷
   const me = members.value.find(m => m.email === authStore.user?.email)
-  return me?.role === 'owner'
+  return me?.role === 'admin'
 })
+
+const roleBadge: Record<string, string> = {
+  admin: 'bg-blue-500/15 text-blue-600',
+  editor: 'bg-green-500/15 text-green-600',
+  viewer: 'bg-gray-500/15 text-gray-500',
+}
 
 watch(() => props.open, async (isOpen) => {
   if (isOpen) {
@@ -152,13 +158,18 @@ async function handleRemove(userId: string) {
                 :key="m.user_id"
                 class="flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-bg-hover"
               >
-                <div>
+                <div class="flex items-center gap-2">
                   <span :class="m.status === 'pending' ? 'text-text-muted italic' : 'text-text-primary'">{{ m.name || m.email }}</span>
-                  <span class="ml-2 text-text-muted">({{ m.role }})</span>
-                  <span v-if="m.status === 'pending'" class="ml-1 rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-600">pending</span>
+                  <span
+                    class="rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    :class="roleBadge[m.role] || 'bg-gray-500/15 text-gray-500'"
+                  >
+                    {{ m.role }}
+                  </span>
+                  <span v-if="m.status === 'pending'" class="rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-600">pending</span>
                 </div>
                 <button
-                  v-if="isOwner && m.role !== 'owner'"
+                  v-if="isAdmin && m.role !== 'admin'"
                   class="text-red-400 hover:text-red-600"
                   title="Remove member"
                   @click="handleRemove(m.user_id)"
@@ -171,8 +182,8 @@ async function handleRemove(userId: string) {
             </ul>
           </div>
 
-          <!-- 邀請表單 -->
-          <div v-if="isOwner">
+          <!-- 邀請表單（僅 admin 可見） -->
+          <div v-if="isAdmin">
             <p class="mb-2 text-xs font-medium text-text-secondary">Invite member</p>
             <div class="flex gap-2">
               <input
@@ -186,8 +197,9 @@ async function handleRemove(userId: string) {
                 v-model="inviteRole"
                 class="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
               >
-                <option value="editor">Editor</option>
                 <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
             <button

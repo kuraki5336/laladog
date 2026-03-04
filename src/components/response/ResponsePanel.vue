@@ -3,9 +3,10 @@ import { ref } from 'vue'
 import { useRequestStore } from '@/stores/requestStore'
 import ResponseBody from './ResponseBody.vue'
 import ResponseHeaders from './ResponseHeaders.vue'
+import ResponseConsole from './ResponseConsole.vue'
 
 const store = useRequestStore()
-const activeTab = ref<'body' | 'headers' | 'scripts'>('body')
+const activeTab = ref<'body' | 'headers' | 'console' | 'scripts'>('body')
 
 function statusColor(status: number): string {
   if (status >= 200 && status < 300) return 'text-success'
@@ -52,6 +53,13 @@ function formatSize(bytes: number): string {
           Headers
         </button>
         <button
+          class="rounded-sm px-2 py-1 text-xs transition-colors"
+          :class="activeTab === 'console' ? 'bg-secondary-10 text-secondary' : 'text-text-muted hover:text-text-primary'"
+          @click="activeTab = 'console'"
+        >
+          Console
+        </button>
+        <button
           v-if="store.scriptOutput"
           class="rounded-sm px-2 py-1 text-xs transition-colors"
           :class="activeTab === 'scripts' ? 'bg-secondary-10 text-secondary' : 'text-text-muted hover:text-text-primary'"
@@ -81,6 +89,11 @@ function formatSize(bytes: number): string {
       <template v-else>
         <ResponseBody v-if="activeTab === 'body'" :response="store.response" />
         <ResponseHeaders v-else-if="activeTab === 'headers'" :headers="store.response.headers" />
+        <ResponseConsole
+          v-else-if="activeTab === 'console' && store.lastRequestDetails"
+          :request="store.lastRequestDetails"
+          :response="store.response"
+        />
         <div v-else-if="activeTab === 'scripts'" class="font-mono text-xs">
           <pre class="whitespace-pre-wrap text-green-400">{{ store.scriptOutput }}</pre>
         </div>

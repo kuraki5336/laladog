@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useCollectionStore } from '@/stores/collectionStore'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useTeamStore } from '@/stores/teamStore'
 import { parsePostmanCollection } from '@/utils/postmanImporter'
 import CollectionItem from './CollectionItem.vue'
 
 const store = useCollectionStore()
+const wsStore = useWorkspaceStore()
+const teamStore = useTeamStore()
 const showAddMenu = ref(false)
 const newName = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const importError = ref<string | null>(null)
+
+/** 是否有編輯權限（admin/editor 或地端 workspace） */
+const canEdit = computed(() => {
+  const ws = wsStore.activeWorkspace
+  if (!ws?.teamId) return true // 地端 workspace 無限制
+  const team = teamStore.teams.find(t => t.id === ws.teamId)
+  return team?.role === 'admin' || team?.role === 'editor'
+})
 
 onMounted(() => {
   store.loadAll()
@@ -55,8 +67,8 @@ async function handleImportFile(e: Event) {
       @change="handleImportFile"
     />
 
-    <!-- Add Collection + Import Buttons -->
-    <div class="mb-2 flex items-center gap-1">
+    <!-- Add Collection + Import Buttons（僅 editor/admin 可見） -->
+    <div v-if="canEdit" class="mb-2 flex items-center gap-1">
       <button
         class="flex h-8 flex-1 items-center justify-center gap-1 rounded-button bg-secondary text-xs font-medium text-white transition-all hover:bg-secondary-60 active:scale-[0.97]"
         @click="showAddMenu = !showAddMenu"
@@ -106,6 +118,7 @@ async function handleImportFile(e: Event) {
       :key="node.id"
       :node="node"
       :depth="0"
+      :can-edit="canEdit"
     />
   </div>
 </template>

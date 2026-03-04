@@ -17,13 +17,13 @@
 | 資料表              | 用途                                            |
 | ------------------- | ----------------------------------------------- |
 | shared_collections  | 更新指定的共享 Collection 記錄                  |
-| team_members        | 驗證當前使用者是否為該團隊的 editor 或 owner    |
+| team_members        | 驗證當前使用者是否為該團隊的 admin 或 editor    |
 
 ---
 
 ## API 總覽
 
-更新一個已存在的共享 Collection。需要 JWT 認證，且當前使用者在該團隊的角色必須為 `editor` 或 `owner`。更新時會同步設定 `updated_by` 為當前使用者、`updated_at` 為當前時間。
+更新一個已存在的共享 Collection。需要 JWT 認證，且當前使用者在該團隊的角色必須為 `admin` 或 `editor`。更新時會同步設定 `updated_by` 為當前使用者、`updated_at` 為當前時間。
 
 ---
 
@@ -107,7 +107,7 @@ PUT /sync/collections/{collection_id}
 ### 處理流程
 
 1. 從 JWT token 中取得當前使用者 ID（`current_user["sub"]`）
-2. 查詢 `team_members` 資料表，驗證該使用者在 Request Body 中指定的 `team_id` 團隊中角色為 `owner` 或 `editor`
+2. 查詢 `team_members` 資料表，驗證該使用者在 Request Body 中指定的 `team_id` 團隊中角色為 `admin` 或 `editor`
 3. 若角色不符（viewer 或非成員），回傳 403 錯誤
 4. 以 `collection_id` 查詢 `shared_collections` 資料表
 5. 若找不到該 Collection，回傳 404 錯誤
@@ -131,11 +131,11 @@ result = await db.execute(
     select(TeamMember).where(
         TeamMember.team_id == body.team_id,
         TeamMember.user_id == user_id,
-        TeamMember.role.in_(["owner", "editor"]),
+        TeamMember.role.in_(["admin", "editor"]),
     )
 )
 if not result.scalar_one_or_none():
-    raise HTTPException(status_code=403, detail="Requires editor or owner role")
+    raise HTTPException(status_code=403, detail="Requires editor or admin role")
 ```
 
 - 權限驗證使用 Request Body 中的 `team_id`，而非從 Collection 記錄中取得
@@ -157,7 +157,7 @@ await db.commit()
 | HTTP 狀態碼 | 錯誤訊息                       | 觸發條件                                    |
 | ----------- | ------------------------------ | ------------------------------------------- |
 | 401         | Unauthorized                   | 未提供或無效的 JWT token                    |
-| 403         | Requires editor or owner role  | 使用者不是團隊成員，或角色為 viewer         |
+| 403         | Requires editor or admin role  | 使用者不是團隊成員，或角色為 viewer         |
 | 404         | Collection not found           | 指定的 collection_id 不存在                 |
 | 422         | Validation Error               | Request Body 格式錯誤或缺少必填欄位         |
 
@@ -169,7 +169,7 @@ await db.commit()
 
 | # | 測試案例                                     | 預期結果                                        |
 | - | -------------------------------------------- | ----------------------------------------------- |
-| 1 | owner 角色更新 Collection 名稱               | 200，回傳更新後的 Collection，name 已變更        |
+| 1 | admin 角色更新 Collection 名稱               | 200，回傳更新後的 Collection，name 已變更        |
 | 2 | editor 角色更新 Collection data              | 200，回傳更新後的 Collection，data 已變更        |
 | 3 | 同時更新 name 和 data                        | 200，兩個欄位皆已更新                            |
 | 4 | 確認 updated_by 為當前使用者 ID              | 200，updated_by 為執行更新的使用者               |
@@ -181,8 +181,8 @@ await db.commit()
 | - | -------------------------------------------- | ----------------------------------------------- |
 | 1 | 未攜帶 JWT token                             | 401 Unauthorized                                |
 | 2 | JWT token 過期或無效                         | 401 Unauthorized                                |
-| 3 | viewer 角色嘗試更新                          | 403 Requires editor or owner role               |
-| 4 | 非團隊成員嘗試更新                           | 403 Requires editor or owner role               |
+| 3 | viewer 角色嘗試更新                          | 403 Requires editor or admin role               |
+| 4 | 非團隊成員嘗試更新                           | 403 Requires editor or admin role               |
 | 5 | collection_id 不存在                         | 404 Collection not found                        |
 | 6 | Request Body 缺少必填欄位                    | 422 Validation Error                            |
 

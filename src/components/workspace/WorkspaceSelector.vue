@@ -1,19 +1,37 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useCollectionStore } from '@/stores/collectionStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useTeamStore } from '@/stores/teamStore'
+import { useSyncStore } from '@/stores/syncStore'
 import TeamMembersDialog from './TeamMembersDialog.vue'
 
 const wsStore = useWorkspaceStore()
 const collectionStore = useCollectionStore()
 const authStore = useAuthStore()
+const teamStore = useTeamStore()
+const syncStore = useSyncStore()
 const isAdding = ref(false)
 const showMembersDialog = ref(false)
 const newName = ref('')
 const showMenu = ref(false)
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
+
+/** 當前 workspace 在 team 中的角色（地端 workspace 無角色） */
+const currentRole = computed(() => {
+  const ws = wsStore.activeWorkspace
+  if (!ws?.teamId) return null
+  const team = teamStore.teams.find(t => t.id === ws.teamId)
+  return team?.role || null
+})
+
+/** 是否為 admin（或地端 workspace） */
+const isAdmin = computed(() => !wsStore.activeWorkspace?.teamId || currentRole.value === 'admin')
+
+/** 是否為雲端 workspace */
+const isCloud = computed(() => !!wsStore.activeWorkspace?.teamId)
 
 async function handleSwitch(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -49,9 +67,32 @@ function handleCancel() {
 async function handleDelete() {
   const ws = wsStore.activeWorkspace
   if (!ws) return
-  if (wsStore.workspaces.length <= 1) return
   showMenu.value = false
-  await wsStore.deleteWorkspace(ws.id)
+
+  if (ws.teamId) {
+    // 雲端 workspace — 刪除整個團隊
+    const ok = await teamStore.deleteTeam(ws.teamId)
+    if (ok) {
+      syncStore.disconnect()
+      await wsStore.deleteWorkspace(ws.id)
+    }
+  } else {
+    // 地端 workspace
+    if (wsStore.workspaces.length <= 1) return
+    await wsStore.deleteWorkspace(ws.id)
+  }
+}
+
+async function handleLeave() {
+  const ws = wsStore.activeWorkspace
+  if (!ws?.teamId || !authStore.user) return
+  showMenu.value = false
+
+  const ok = await teamStore.leaveTeam(ws.teamId, authStore.user.id)
+  if (ok) {
+    syncStore.disconnect()
+    await wsStore.deleteWorkspace(ws.id)
+  }
 }
 
 function startRename() {
@@ -148,7 +189,7 @@ function toggleMenu() {
           :key="ws.id"
           :value="ws.id"
         >
-          {{ ws.name }}
+          {{ ws.teamId ? '☁ ' : '' }}{{ ws.name }}
         </option>
         <option value="__add__">+ New Workspace</option>
       </select>
@@ -172,7 +213,9 @@ function toggleMenu() {
           v-if="showMenu"
           class="absolute left-0 top-full z-50 mt-1 w-40 rounded-md border border-border bg-bg-card py-1 shadow-lg"
         >
+          <!-- Rename：僅 admin 或地端 workspace -->
           <button
+            v-if="isAdmin"
             class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
             @click="startRename"
           >
@@ -181,6 +224,8 @@ function toggleMenu() {
             </svg>
             Rename
           </button>
+
+          <!-- Members：所有人可見 -->
           <button
             class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
             @click="showMembersDialog = true; showMenu = false"
@@ -193,10 +238,27 @@ function toggleMenu() {
             </svg>
             Members
           </button>
+
+          <!-- Leave：非 admin 的雲端 workspace -->
           <button
+            v-if="isCloud && !isAdmin"
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-yellow-600 hover:bg-yellow-500/10"
+            @click="handleLeave"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" x2="9" y1="12" y2="12" />
+            </svg>
+            Leave
+          </button>
+
+          <!-- Delete：admin 的雲端 workspace，或地端 workspace -->
+          <button
+            v-if="isAdmin"
             class="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-bg-hover"
-            :class="wsStore.workspaces.length <= 1 ? 'text-text-muted cursor-not-allowed' : 'text-red-500'"
-            :disabled="wsStore.workspaces.length <= 1"
+            :class="!isCloud && wsStore.workspaces.length <= 1 ? 'text-text-muted cursor-not-allowed' : 'text-red-500'"
+            :disabled="!isCloud && wsStore.workspaces.length <= 1"
             @click="handleDelete"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

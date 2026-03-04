@@ -24,7 +24,7 @@ class TeamMember(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     team_id: Mapped[str] = mapped_column(String, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
-    role: Mapped[str] = mapped_column(String, nullable=False, default="viewer")  # owner / editor / viewer
+    role: Mapped[str] = mapped_column(String, nullable=False, default="viewer")  # admin / editor / viewer
     joined_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )

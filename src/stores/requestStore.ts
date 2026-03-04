@@ -18,6 +18,14 @@ export const useRequestStore = defineStore('request', () => {
   const error = ref<string | null>(null)
   const scriptOutput = ref<string>('')
 
+  /** 最後一次發送的請求細節（供 Console tab 顯示） */
+  const lastRequestDetails = ref<{
+    method: string
+    url: string
+    headers: Record<string, string>
+    body: string | null
+  } | null>(null)
+
   /** 執行 script（pre-request 或 tests） */
   function executeScript(scriptCode: string, responseData?: HttpResponse | null): string {
     const logs: string[] = []
@@ -229,6 +237,14 @@ export const useRequestStore = defineStore('request', () => {
         resolvedBody = JSON.stringify(formParts)
       }
 
+      // 記錄已解析的請求細節（供 Console tab 顯示）
+      lastRequestDetails.value = {
+        method: activeRequest.value.method,
+        url: resolvedUrl,
+        headers: { ...resolvedHeaders },
+        body: resolvedBody,
+      }
+
       // Tauri 環境用 invoke，瀏覽器用 fetch fallback
       const result = isTauri
         ? await sendViaTauri(activeRequest.value.method, resolvedUrl, resolvedHeaders, resolvedBody, activeRequest.value.body.type)
@@ -320,6 +336,7 @@ export const useRequestStore = defineStore('request', () => {
     }
     response.value = null
     error.value = null
+    lastRequestDetails.value = null
   }
 
   /** 儲存當前請求回 Collection */
@@ -345,6 +362,7 @@ export const useRequestStore = defineStore('request', () => {
     activeRequest.value = createEmptyRequest()
     response.value = null
     error.value = null
+    lastRequestDetails.value = null
   }
 
   return {
@@ -352,6 +370,7 @@ export const useRequestStore = defineStore('request', () => {
     response,
     error,
     scriptOutput,
+    lastRequestDetails,
     executeScript,
     sendRequest,
     saveToCollection,

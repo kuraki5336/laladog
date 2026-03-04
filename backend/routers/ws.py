@@ -122,9 +122,9 @@ async def handle_collection_update(
     async with async_session() as db:
         # 驗證寫入權限（需要 editor 以上）
         role = await get_member_role(user_id, team_id, db)
-        if role not in ("owner", "editor"):
+        if role not in ("admin", "editor"):
             await websocket.send_text(json.dumps({
-                "type": "error", "message": "Requires editor or owner role"
+                "type": "error", "message": "Requires editor or admin role"
             }))
             return
 

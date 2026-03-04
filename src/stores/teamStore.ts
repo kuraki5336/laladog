@@ -95,5 +95,41 @@ export const useTeamStore = defineStore('team', () => {
     }
   }
 
-  return { teams, isLoading, error, loadTeams, loadMembers, createTeam, inviteMember, removeMember }
+  /** 離開團隊（自我移除） */
+  async function leaveTeam(teamId: string, userId: string): Promise<boolean> {
+    error.value = null
+    try {
+      const resp = await apiCall('DELETE', `/teams/${teamId}/members/${userId}`)
+      if (resp.status >= 400) {
+        const data = JSON.parse(resp.body)
+        throw new Error(data.detail || `Failed to leave: ${resp.status}`)
+      }
+      // 從本地移除該 team
+      teams.value = teams.value.filter(t => t.id !== teamId)
+      return true
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+      return false
+    }
+  }
+
+  /** 刪除整個團隊（僅 admin） */
+  async function deleteTeam(teamId: string): Promise<boolean> {
+    error.value = null
+    try {
+      const resp = await apiCall('DELETE', `/teams/${teamId}`)
+      if (resp.status >= 400) {
+        const data = JSON.parse(resp.body)
+        throw new Error(data.detail || `Failed to delete team: ${resp.status}`)
+      }
+      // 從本地移除該 team
+      teams.value = teams.value.filter(t => t.id !== teamId)
+      return true
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+      return false
+    }
+  }
+
+  return { teams, isLoading, error, loadTeams, loadMembers, createTeam, inviteMember, removeMember, leaveTeam, deleteTeam }
 })

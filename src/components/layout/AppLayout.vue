@@ -36,6 +36,18 @@ onUnmounted(() => {
   syncStore.disconnect()
 })
 
+// 監聽登入狀態 → 登入後同步團隊
+watch(
+  () => authStore.isLoggedIn,
+  async (loggedIn) => {
+    if (loggedIn) {
+      await syncTeamCollections()
+    } else {
+      syncStore.disconnect()
+    }
+  },
+)
+
 // 監聽 activeWorkspace 切換 → 斷舊連新
 watch(
   () => wsStore.activeWorkspace?.teamId,

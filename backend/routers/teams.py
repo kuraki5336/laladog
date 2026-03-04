@@ -16,7 +16,7 @@ class CreateTeamRequest(BaseModel):
 
 class InviteMemberRequest(BaseModel):
     email: str
-    role: str = "viewer"  # editor / viewer
+    role: str = "viewer"  # viewer / editor / admin
 
 
 class TeamResponse(BaseModel):
@@ -53,7 +53,7 @@ async def create_team(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """建立團隊（建立者自動成為 owner）"""
+    """建立團隊（建立者自動成為 admin）"""
     import traceback
     user_id = current_user["sub"]
     try:
@@ -61,11 +61,11 @@ async def create_team(
         db.add(team)
         await db.flush()
 
-        member = TeamMember(team_id=team.id, user_id=user_id, role="owner")
+        member = TeamMember(team_id=team.id, user_id=user_id, role="admin")
         db.add(member)
         await db.commit()
 
-        return TeamResponse(id=team.id, name=team.name, owner_id=team.owner_id, role="owner")
+        return TeamResponse(id=team.id, name=team.name, owner_id=team.owner_id, role="admin")
     except Exception as e:
         print(f"[TEAM CREATE ERROR] {type(e).__name__}: {e}")
         traceback.print_exc()
@@ -130,19 +130,23 @@ async def invite_member(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """邀請成員加入團隊（僅 owner 可操作，未註冊用戶也可邀請）"""
+    """邀請成員加入團隊（僅 admin 可操作，未註冊用戶也可邀請）"""
     user_id = current_user["sub"]
 
-    # 驗證權限
+    # 驗證角色合法性
+    if body.role not in ("viewer", "editor", "admin"):
+        raise HTTPException(status_code=400, detail="Role must be viewer, editor, or admin")
+
+    # 驗證權限（需要 admin）
     result = await db.execute(
         select(TeamMember).where(
             TeamMember.team_id == team_id,
             TeamMember.user_id == user_id,
-            TeamMember.role == "owner",
+            TeamMember.role == "admin",
         )
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Only team owner can invite members")
+        raise HTTPException(status_code=403, detail="Only admin can invite members")
 
     # 查找受邀者（透過 email 找 user）
     from backend.models.user import User
@@ -192,42 +196,105 @@ async def remove_member(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """移除成員或取消 pending 邀請（僅 owner 可操作）"""
+    """移除成員、取消 pending 邀請、或離開團隊"""
+    user_id = current_user["sub"]
+    is_self = member_user_id == user_id
+
+    if is_self:
+        # 自我移除（Leave）— 任何人都可以離開
+        result = await db.execute(
+            select(TeamMember).where(
+                TeamMember.team_id == team_id, TeamMember.user_id == user_id
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=404, detail="Not a team member")
+
+        # 如果是 admin，需確保至少還有一個其他 admin
+        if member.role == "admin":
+            result = await db.execute(
+                select(TeamMember).where(
+                    TeamMember.team_id == team_id,
+                    TeamMember.role == "admin",
+                    TeamMember.user_id != user_id,
+                )
+            )
+            if not result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot leave: you are the only admin. Delete the team or assign another admin first."
+                )
+
+        await db.delete(member)
+        await db.commit()
+        return {"message": "Left team"}
+    else:
+        # 移除他人 — 需要 admin 權限
+        result = await db.execute(
+            select(TeamMember).where(
+                TeamMember.team_id == team_id,
+                TeamMember.user_id == user_id,
+                TeamMember.role == "admin",
+            )
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Only admin can remove members")
+
+        # 先嘗試找已加入的成員
+        result = await db.execute(
+            select(TeamMember).where(
+                TeamMember.team_id == team_id, TeamMember.user_id == member_user_id
+            )
+        )
+        member = result.scalar_one_or_none()
+        if member:
+            await db.delete(member)
+            await db.commit()
+            return {"message": "Member removed"}
+
+        # 找不到成員，嘗試找 pending invitation（用 invitation id）
+        result = await db.execute(
+            select(PendingInvitation).where(
+                PendingInvitation.id == member_user_id,
+                PendingInvitation.team_id == team_id,
+            )
+        )
+        invitation = result.scalar_one_or_none()
+        if invitation:
+            await db.delete(invitation)
+            await db.commit()
+            return {"message": "Invitation cancelled"}
+
+        raise HTTPException(status_code=404, detail="Member not found")
+
+
+@router.delete("/{team_id}")
+async def delete_team(
+    team_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """刪除整個團隊（僅 admin 可操作，cascade 刪除所有成員和 collections）"""
     user_id = current_user["sub"]
 
+    # 驗證 admin 權限
     result = await db.execute(
         select(TeamMember).where(
             TeamMember.team_id == team_id,
             TeamMember.user_id == user_id,
-            TeamMember.role == "owner",
+            TeamMember.role == "admin",
         )
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Only team owner can remove members")
+        raise HTTPException(status_code=403, detail="Only admin can delete team")
 
-    # 先嘗試找已加入的成員
-    result = await db.execute(
-        select(TeamMember).where(
-            TeamMember.team_id == team_id, TeamMember.user_id == member_user_id
-        )
-    )
-    member = result.scalar_one_or_none()
-    if member:
-        await db.delete(member)
-        await db.commit()
-        return {"message": "Member removed"}
+    # 刪除團隊（CASCADE 會自動刪除 team_members, pending_invitations, shared_collections）
+    result = await db.execute(select(Team).where(Team.id == team_id))
+    team = result.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
 
-    # 找不到成員，嘗試找 pending invitation（用 invitation id）
-    result = await db.execute(
-        select(PendingInvitation).where(
-            PendingInvitation.id == member_user_id,
-            PendingInvitation.team_id == team_id,
-        )
-    )
-    invitation = result.scalar_one_or_none()
-    if invitation:
-        await db.delete(invitation)
-        await db.commit()
-        return {"message": "Invitation cancelled"}
-
-    raise HTTPException(status_code=404, detail="Member not found")
+    await db.delete(team)
+    await db.commit()
+    return {"message": "Team deleted"}

@@ -17,13 +17,13 @@
 | 資料表              | 用途                                                    |
 | ------------------- | ------------------------------------------------------- |
 | shared_collections  | 刪除指定的共享 Collection 記錄                          |
-| team_members        | 驗證當前使用者是否為該 Collection 所屬團隊的 owner      |
+| team_members        | 驗證當前使用者是否為該 Collection 所屬團隊的 admin      |
 
 ---
 
 ## API 總覽
 
-刪除一個已存在的共享 Collection。需要 JWT 認證，且當前使用者在該 Collection 所屬團隊的角色必須為 `owner`。此為最高權限操作，`editor` 和 `viewer` 皆無法執行。
+刪除一個已存在的共享 Collection。需要 JWT 認證，且當前使用者在該 Collection 所屬團隊的角色必須為 `admin`。此為最高權限操作，`editor` 和 `viewer` 皆無法執行。
 
 ---
 
@@ -85,8 +85,8 @@ DELETE /sync/collections/{collection_id}
 2. 以 `collection_id` 查詢 `shared_collections` 資料表
 3. 若找不到該 Collection，回傳 404 錯誤
 4. 從找到的 Collection 記錄中取得 `team_id`
-5. 查詢 `team_members` 資料表，驗證該使用者在對應團隊中的角色是否為 `owner`
-6. 若角色不是 `owner`，回傳 403 錯誤
+5. 查詢 `team_members` 資料表，驗證該使用者在對應團隊中的角色是否為 `admin`
+6. 若角色不是 `admin`，回傳 403 錯誤
 7. 刪除該 Collection 記錄並提交資料庫變更
 
 ### 關鍵程式碼位置
@@ -96,7 +96,7 @@ DELETE /sync/collections/{collection_id}
 
 ### 權限驗證邏輯
 
-本 API 的權限驗證流程與其他 Sync API 不同——先查 Collection 再驗權限，且角色限定為 `owner`：
+本 API 的權限驗證流程與其他 Sync API 不同——先查 Collection 再驗權限，且角色限定為 `admin`：
 
 ```python
 # Step 1: 先查詢 Collection 是否存在
@@ -107,20 +107,20 @@ collection = result.scalar_one_or_none()
 if not collection:
     raise HTTPException(status_code=404, detail="Collection not found")
 
-# Step 2: 從 Collection 取得 team_id，驗證 owner 角色
+# Step 2: 從 Collection 取得 team_id，驗證 admin 角色
 result = await db.execute(
     select(TeamMember).where(
         TeamMember.team_id == collection.team_id,
         TeamMember.user_id == user_id,
-        TeamMember.role == "owner",
+        TeamMember.role == "admin",
     )
 )
 if not result.scalar_one_or_none():
-    raise HTTPException(status_code=403, detail="Only owner can delete")
+    raise HTTPException(status_code=403, detail="Only admin can delete")
 ```
 
 - `team_id` 從 Collection 記錄中取得，而非從 Request Body
-- 僅允許 `owner` 角色，`editor` 也不可刪除
+- 僅允許 `admin` 角色，`editor` 也不可刪除
 
 ### 刪除邏輯
 
@@ -138,7 +138,7 @@ await db.commit()
 | HTTP 狀態碼 | 錯誤訊息                  | 觸發條件                                      |
 | ----------- | ------------------------- | --------------------------------------------- |
 | 401         | Unauthorized              | 未提供或無效的 JWT token                      |
-| 403         | Only owner can delete     | 使用者不是團隊 owner（包含 editor / viewer / 非成員） |
+| 403         | Only admin can delete     | 使用者不是團隊 admin（包含 editor / viewer / 非成員） |
 | 404         | Collection not found      | 指定的 collection_id 不存在                   |
 
 ---
@@ -149,7 +149,7 @@ await db.commit()
 
 | # | 測試案例                                     | 預期結果                                    |
 | - | -------------------------------------------- | ------------------------------------------- |
-| 1 | owner 角色刪除 Collection                    | 200，回傳 `{"message": "Collection deleted"}` |
+| 1 | admin 角色刪除 Collection                    | 200，回傳 `{"message": "Collection deleted"}` |
 | 2 | 刪除後再次查詢該 Collection                  | 404 Collection not found                    |
 | 3 | 刪除後列出團隊 Collection，確認已不包含      | 200，回傳的列表中不再包含已刪除的 Collection |
 
@@ -159,9 +159,9 @@ await db.commit()
 | - | -------------------------------------------- | ------------------------------------------- |
 | 1 | 未攜帶 JWT token                             | 401 Unauthorized                            |
 | 2 | JWT token 過期或無效                         | 401 Unauthorized                            |
-| 3 | editor 角色嘗試刪除                          | 403 Only owner can delete                   |
-| 4 | viewer 角色嘗試刪除                          | 403 Only owner can delete                   |
-| 5 | 非團隊成員嘗試刪除                           | 403 Only owner can delete                   |
+| 3 | editor 角色嘗試刪除                          | 403 Only admin can delete                   |
+| 4 | viewer 角色嘗試刪除                          | 403 Only admin can delete                   |
+| 5 | 非團隊成員嘗試刪除                           | 403 Only admin can delete                   |
 | 6 | collection_id 不存在                         | 404 Collection not found                    |
 | 7 | 重複刪除同一個 Collection                    | 404 Collection not found（第二次）          |
 
