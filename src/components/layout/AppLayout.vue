@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import Sidebar from './Sidebar.vue'
 import MainPanel from './MainPanel.vue'
 import StatusBar from './StatusBar.vue'
@@ -11,12 +11,14 @@ import { useAuthStore } from '@/stores/authStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTeamStore } from '@/stores/teamStore'
 import { useCollectionStore } from '@/stores/collectionStore'
+import { useSyncStore } from '@/stores/syncStore'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const wsStore = useWorkspaceStore()
 const teamStore = useTeamStore()
 const collectionStore = useCollectionStore()
+const syncStore = useSyncStore()
 
 onMounted(async () => {
   themeStore.init()
@@ -24,13 +26,30 @@ onMounted(async () => {
   await wsStore.loadAll()
   await collectionStore.loadAll()
 
-  // 已登入 → 同步團隊 collections
+  // 已登入 → 同步團隊 collections + 建立 WebSocket
   if (authStore.isLoggedIn) {
     await syncTeamCollections()
   }
 })
 
-/** 同步所有團隊的 shared collections 到本地 */
+onUnmounted(() => {
+  syncStore.disconnect()
+})
+
+// 監聽 activeWorkspace 切換 → 斷舊連新
+watch(
+  () => wsStore.activeWorkspace?.teamId,
+  (newTeamId, oldTeamId) => {
+    if (newTeamId === oldTeamId) return
+    if (newTeamId && authStore.isLoggedIn) {
+      syncStore.connect(newTeamId)
+    } else {
+      syncStore.disconnect()
+    }
+  },
+)
+
+/** 同步所有團隊的 shared collections 到本地 + 建立 WebSocket */
 async function syncTeamCollections() {
   try {
     await teamStore.loadTeams()
@@ -42,6 +61,12 @@ async function syncTeamCollections() {
     // 對每個 team workspace 拉取雲端 collections
     for (const [teamId, wsId] of mapping) {
       await collectionStore.pullFromCloud(teamId, wsId)
+    }
+
+    // 建立 WebSocket 連線（對當前 active workspace 的 team）
+    const activeTeamId = wsStore.activeWorkspace?.teamId
+    if (activeTeamId) {
+      syncStore.connect(activeTeamId)
     }
   } catch (e) {
     console.error('[AppLayout] Team sync failed:', e)

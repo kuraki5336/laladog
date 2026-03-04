@@ -185,7 +185,7 @@ export const useCollectionStore = defineStore('collection', () => {
   /** debounce timer，避免頻繁同步 */
   let syncTimer: ReturnType<typeof setTimeout> | null = null
 
-  /** 排程同步到雲端（debounce 1.5 秒） */
+  /** 排程同步到雲端（debounce 1 秒） */
   function scheduleSyncToCloud() {
     const wsStore = useWorkspaceStore()
     const authStore = useAuthStore()
@@ -194,7 +194,7 @@ export const useCollectionStore = defineStore('collection', () => {
     if (syncTimer) clearTimeout(syncTimer)
     syncTimer = setTimeout(() => {
       pushToCloud()
-    }, 1500)
+    }, 1000)
   }
 
   /** 收集指定 workspace 的所有 collection nodes，序列化為 JSON */
@@ -232,19 +232,30 @@ export const useCollectionStore = defineStore('collection', () => {
     )
   }
 
-  /** 推送當前 workspace 的 collections 到雲端 */
+  /** 推送當前 workspace 的 collections 到雲端（優先走 WebSocket，fallback HTTP） */
   async function pushToCloud() {
     const wsStore = useWorkspaceStore()
     const authStore = useAuthStore()
-    const ws = wsStore.activeWorkspace
-    if (!ws?.teamId || !authStore.isLoggedIn) return
+    const activeWs = wsStore.activeWorkspace
+    if (!activeWs?.teamId || !authStore.isLoggedIn) return
 
     isSyncing.value = true
     try {
-      const data = serializeWorkspaceCollections(ws.id)
+      const data = serializeWorkspaceCollections(activeWs.id)
 
-      // 先查雲端是否已有此 team 的 shared collections
-      const listResp = await apiCall('GET', `/sync/${ws.teamId}/collections`)
+      // 優先走 WebSocket
+      const { useSyncStore } = await import('./syncStore')
+      const syncStore = useSyncStore()
+      if (syncStore.status === 'connected') {
+        const sent = syncStore.pushViaWs(data, activeWs.name)
+        if (sent) {
+          console.log('[Sync] Pushed via WebSocket')
+          return
+        }
+      }
+
+      // Fallback: HTTP
+      const listResp = await apiCall('GET', `/sync/${activeWs.teamId}/collections`)
       if (listResp.status >= 400) {
         console.error('[Sync] Failed to list shared collections:', listResp.body)
         return
@@ -253,21 +264,19 @@ export const useCollectionStore = defineStore('collection', () => {
       const existing: SharedCollectionResp[] = JSON.parse(listResp.body)
 
       if (existing.length > 0) {
-        // 已有 → 更新第一筆（一個 workspace 對應一筆 SharedCollection）
         await apiCall('PUT', `/sync/collections/${existing[0].id}`, {
-          team_id: ws.teamId,
-          name: ws.name,
+          team_id: activeWs.teamId,
+          name: activeWs.name,
           data,
         })
-        console.log('[Sync] Updated shared collection to cloud')
+        console.log('[Sync] Updated via HTTP (fallback)')
       } else {
-        // 沒有 → 新建
         await apiCall('POST', '/sync/collections', {
-          team_id: ws.teamId,
-          name: ws.name,
+          team_id: activeWs.teamId,
+          name: activeWs.name,
           data,
         })
-        console.log('[Sync] Created shared collection on cloud')
+        console.log('[Sync] Created via HTTP (fallback)')
       }
     } catch (e) {
       console.error('[Sync] Push to cloud failed:', e)
@@ -361,6 +370,66 @@ export const useCollectionStore = defineStore('collection', () => {
     }
   }
 
+  /** 套用遠端 WebSocket 推送的 collection 更新（不觸發再次同步） */
+  async function applyRemoteUpdate(dataJson: string, workspaceId: string) {
+    try {
+      const cloudNodes: CollectionNode[] = JSON.parse(dataJson)
+      if (!Array.isArray(cloudNodes) || cloudNodes.length === 0) return
+
+      // 清除本地此 workspace 的所有 collection nodes
+      if (isTauri) {
+        const db = await getDb()
+        const topRows = await db.select<any[]>(
+          'SELECT id FROM collection_nodes WHERE workspace_id = ? AND parent_id IS NULL',
+          [workspaceId],
+        )
+        for (const row of topRows) {
+          await db.execute('DELETE FROM collection_nodes WHERE id = ?', [row.id])
+        }
+        for (const n of cloudNodes) {
+          await db.execute(
+            'INSERT INTO collection_nodes (id, name, node_type, parent_id, sort_order, request_data, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [
+              n.id,
+              n.name,
+              n.type,
+              n.parentId,
+              n.sortOrder,
+              n.request ? JSON.stringify(n.request) : null,
+              n.type === 'collection' ? workspaceId : (n.workspaceId || null),
+            ],
+          )
+        }
+      }
+
+      // 更新記憶體
+      const wsTopIds = new Set(
+        nodes.value
+          .filter((n) => n.workspaceId === workspaceId && n.parentId === null)
+          .map((n) => n.id),
+      )
+      const toRemove = new Set<string>()
+      function collectIds(nodeId: string) {
+        toRemove.add(nodeId)
+        nodes.value.filter((n) => n.parentId === nodeId).forEach((n) => collectIds(n.id))
+      }
+      wsTopIds.forEach((id) => collectIds(id))
+      nodes.value = nodes.value.filter((n) => !toRemove.has(n.id))
+
+      for (const n of cloudNodes) {
+        nodes.value.push({
+          ...n,
+          workspaceId: n.type === 'collection' ? workspaceId : (n.workspaceId || null),
+          isExpanded: false,
+        })
+      }
+
+      console.log(`[Sync] Applied remote update: ${cloudNodes.length} nodes`)
+    } catch (e) {
+      console.error('[Sync] Failed to apply remote update:', e)
+    }
+  }
+
   return {
     nodes,
     selectedNodeId,
@@ -375,5 +444,7 @@ export const useCollectionStore = defineStore('collection', () => {
     importNodes,
     pushToCloud,
     pullFromCloud,
+    applyRemoteUpdate,
+    serializeWorkspaceCollections,
   }
 })

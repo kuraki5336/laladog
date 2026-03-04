@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.database import init_db
-from backend.routers import auth, teams, sync
+from backend.routers import auth, teams, sync, ws
 
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(teams.router)
 app.include_router(sync.router)
+app.include_router(ws.router)
 
 
 @app.get("/health")
