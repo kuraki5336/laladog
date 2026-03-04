@@ -1,30 +1,93 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed } from 'vue'
 import type { ActiveRequest } from '@/types/request'
 import type { HttpResponse } from '@/types/response'
+import type { SavedRequest } from '@/types/collection'
 import { createEmptyRequest } from '@/types/request'
 import { useEnvironmentStore } from './environmentStore'
 import { useCollectionStore } from './collectionStore'
 import { useHistoryStore } from './historyStore'
 import { useConsoleStore } from './consoleStore'
+import { useTabStore } from './tabStore'
 import { resolveVariables } from '@/utils/variableResolver'
 
 /** 偵測是否在 Tauri 環境中 */
 const isTauri = !!(window as any).__TAURI_INTERNALS__
 
 export const useRequestStore = defineStore('request', () => {
-  const activeRequest = ref<ActiveRequest>(createEmptyRequest())
-  const response = ref<HttpResponse | null>(null)
-  const error = ref<string | null>(null)
-  const scriptOutput = ref<string>('')
+  // tabStore 在函式內呼叫（Pinia 支援延遲取用）
+  function getTabStore() {
+    return useTabStore()
+  }
 
-  /** 最後一次發送的請求細節（供 Console tab 顯示） */
-  const lastRequestDetails = ref<{
-    method: string
-    url: string
-    headers: Record<string, string>
-    body: string | null
-  } | null>(null)
+  /* ── Facade: 代理到 activeTab ── */
+
+  const activeRequest = computed<ActiveRequest>({
+    get: () => {
+      const tabStore = getTabStore()
+      return tabStore.activeTab?.request ?? createEmptyRequest()
+    },
+    set: (val: ActiveRequest) => {
+      const tabStore = getTabStore()
+      if (tabStore.activeTab) {
+        tabStore.activeTab.request = val
+      }
+    },
+  })
+
+  const response = computed<HttpResponse | null>({
+    get: () => {
+      const tabStore = getTabStore()
+      return tabStore.activeTab?.response ?? null
+    },
+    set: (val: HttpResponse | null) => {
+      const tabStore = getTabStore()
+      if (tabStore.activeTab) {
+        tabStore.activeTab.response = val
+      }
+    },
+  })
+
+  const error = computed<string | null>({
+    get: () => {
+      const tabStore = getTabStore()
+      return tabStore.activeTab?.error ?? null
+    },
+    set: (val: string | null) => {
+      const tabStore = getTabStore()
+      if (tabStore.activeTab) {
+        tabStore.activeTab.error = val
+      }
+    },
+  })
+
+  const scriptOutput = computed<string>({
+    get: () => {
+      const tabStore = getTabStore()
+      return tabStore.activeTab?.scriptOutput ?? ''
+    },
+    set: (val: string) => {
+      const tabStore = getTabStore()
+      if (tabStore.activeTab) {
+        tabStore.activeTab.scriptOutput = val
+      }
+    },
+  })
+
+  const lastRequestDetails = computed<{
+    method: string; url: string; headers: Record<string, string>; body: string | null
+  } | null>({
+    get: () => {
+      const tabStore = getTabStore()
+      return tabStore.activeTab?.lastRequestDetails ?? null
+    },
+    set: (val) => {
+      const tabStore = getTabStore()
+      if (tabStore.activeTab) {
+        tabStore.activeTab.lastRequestDetails = val
+      }
+    },
+  })
 
   /** 執行 script（pre-request 或 tests） */
   function executeScript(scriptCode: string, responseData?: HttpResponse | null): string {
@@ -110,7 +173,7 @@ export const useRequestStore = defineStore('request', () => {
     const { invoke } = await import('@tauri-apps/api/core')
     const result = await invoke<{
       status: number; status_text: string; headers: Record<string, string>
-      body: string; duration: number; size: number
+      body: string; duration: number; size: number; body_encoding?: string
     }>('send_http_request', {
       payload: { method, url, headers, body, body_type: bodyType },
     })
@@ -121,6 +184,7 @@ export const useRequestStore = defineStore('request', () => {
       body: result.body,
       duration: result.duration,
       size: result.size,
+      bodyEncoding: (result.body_encoding || 'text') as 'text' | 'base64',
     }
   }
 
@@ -146,36 +210,41 @@ export const useRequestStore = defineStore('request', () => {
       body: respBody,
       duration,
       size: new Blob([respBody]).size,
+      bodyEncoding: 'text' as const,
     }
   }
 
-  /** 發送 HTTP 請求 */
+  /** 發送 HTTP 請求（寫入特定 tab，避免切 tab 後寫錯） */
   async function sendRequest() {
-    error.value = null
-    response.value = null
-    scriptOutput.value = ''
-    activeRequest.value.isSending = true
+    const tabStore = getTabStore()
+    const currentTabId = tabStore.activeTabId
+    const tab = tabStore.tabs.find((t: any) => t.id === currentTabId)
+    if (!tab) return
 
-    // 提升到 try 外層，以便 catch 區塊也能記錄 console
+    tab.error = null
+    tab.response = null
+    tab.scriptOutput = ''
+    tab.request.isSending = true
+
     let resolvedUrl = ''
     let resolvedHeaders: Record<string, string> = {}
     let resolvedBody: string | null = null
 
     try {
       // Pre-request Script
-      if (activeRequest.value.preRequestScript) {
-        const preOutput = executeScript(activeRequest.value.preRequestScript)
-        scriptOutput.value = preOutput
+      if (tab.request.preRequestScript) {
+        const preOutput = executeScript(tab.request.preRequestScript)
+        tab.scriptOutput = preOutput
       }
 
       const envStore = useEnvironmentStore()
       const vars = envStore.allVariables
 
       // 解析環境變數
-      resolvedUrl = resolveVariables(activeRequest.value.url, vars)
+      resolvedUrl = resolveVariables(tab.request.url, vars)
 
       // 附加 Query Params
-      const enabledParams = (activeRequest.value.params || []).filter(p => p.enabled && p.key)
+      const enabledParams = (tab.request.params || []).filter((p: any) => p.enabled && p.key)
       if (enabledParams.length > 0) {
         const url = new URL(resolvedUrl)
         for (const p of enabledParams) {
@@ -185,14 +254,14 @@ export const useRequestStore = defineStore('request', () => {
       }
 
       resolvedHeaders = {}
-      for (const h of activeRequest.value.headers) {
+      for (const h of tab.request.headers) {
         if (h.enabled && h.key) {
           resolvedHeaders[resolveVariables(h.key, vars)] = resolveVariables(h.value, vars)
         }
       }
 
       // Auth → 加入 Headers
-      const auth = activeRequest.value.auth
+      const auth = tab.request.auth
       if (auth.type === 'bearer' && auth.bearer?.token) {
         resolvedHeaders['Authorization'] = `Bearer ${resolveVariables(auth.bearer.token, vars)}`
       } else if (auth.type === 'basic' && auth.basic) {
@@ -201,34 +270,34 @@ export const useRequestStore = defineStore('request', () => {
         resolvedHeaders['Authorization'] = `Basic ${btoa(`${user}:${pass}`)}`
       }
 
-      // 根據 Body type 自動補 Content-Type（若使用者未手動設定）
+      // 根據 Body type 自動補 Content-Type
       const hasContentType = Object.keys(resolvedHeaders).some(k => k.toLowerCase() === 'content-type')
-      if (!hasContentType && activeRequest.value.body.type !== 'none') {
-        if (activeRequest.value.body.type === 'raw') {
-          const rawType = activeRequest.value.body.rawType || 'text'
+      if (!hasContentType && tab.request.body.type !== 'none') {
+        if (tab.request.body.type === 'raw') {
+          const rawType = tab.request.body.rawType || 'text'
           if (rawType === 'json') resolvedHeaders['Content-Type'] = 'application/json'
           else if (rawType === 'xml') resolvedHeaders['Content-Type'] = 'application/xml'
           else resolvedHeaders['Content-Type'] = 'text/plain'
-        } else if (activeRequest.value.body.type === 'x-www-form-urlencoded') {
+        } else if (tab.request.body.type === 'x-www-form-urlencoded') {
           resolvedHeaders['Content-Type'] = 'application/x-www-form-urlencoded'
-        } else if (activeRequest.value.body.type === 'form-data') {
+        } else if (tab.request.body.type === 'form-data') {
           resolvedHeaders['Content-Type'] = 'multipart/form-data'
         }
       }
 
       resolvedBody = null
-      if (activeRequest.value.body.type === 'raw' && activeRequest.value.body.raw) {
-        resolvedBody = resolveVariables(activeRequest.value.body.raw, vars)
-      } else if (activeRequest.value.body.type === 'x-www-form-urlencoded') {
+      if (tab.request.body.type === 'raw' && tab.request.body.raw) {
+        resolvedBody = resolveVariables(tab.request.body.raw, vars)
+      } else if (tab.request.body.type === 'x-www-form-urlencoded') {
         const params = new URLSearchParams()
-        for (const item of activeRequest.value.body.urlencoded || []) {
+        for (const item of tab.request.body.urlencoded || []) {
           if (item.enabled) {
             params.append(resolveVariables(item.key, vars), resolveVariables(item.value, vars))
           }
         }
         resolvedBody = params.toString()
-      } else if (activeRequest.value.body.type === 'form-data') {
-        const formParts = (activeRequest.value.body.formData || [])
+      } else if (tab.request.body.type === 'form-data') {
+        const formParts = (tab.request.body.formData || [])
           .filter((item: any) => item.enabled)
           .map((item: any) => ({
             key: resolveVariables(item.key, vars),
@@ -237,9 +306,9 @@ export const useRequestStore = defineStore('request', () => {
         resolvedBody = JSON.stringify(formParts)
       }
 
-      // 記錄已解析的請求細節（供 Console tab 顯示）
-      lastRequestDetails.value = {
-        method: activeRequest.value.method,
+      // 記錄已解析的請求細節
+      tab.lastRequestDetails = {
+        method: tab.request.method,
         url: resolvedUrl,
         headers: { ...resolvedHeaders },
         body: resolvedBody,
@@ -247,44 +316,45 @@ export const useRequestStore = defineStore('request', () => {
 
       // Tauri 環境用 invoke，瀏覽器用 fetch fallback
       const result = isTauri
-        ? await sendViaTauri(activeRequest.value.method, resolvedUrl, resolvedHeaders, resolvedBody, activeRequest.value.body.type)
-        : await sendViaFetch(activeRequest.value.method, resolvedUrl, resolvedHeaders, resolvedBody)
+        ? await sendViaTauri(tab.request.method, resolvedUrl, resolvedHeaders, resolvedBody, tab.request.body.type)
+        : await sendViaFetch(tab.request.method, resolvedUrl, resolvedHeaders, resolvedBody)
 
-      response.value = {
+      tab.response = {
         status: result.status,
         statusText: result.statusText,
         headers: result.headers,
         body: result.body,
         duration: result.duration,
         size: result.size,
+        bodyEncoding: result.bodyEncoding,
       }
 
-      // Tests Script（回應後自動執行）
-      if (activeRequest.value.testScript) {
-        const testOutput = executeScript(activeRequest.value.testScript, response.value)
-        scriptOutput.value = scriptOutput.value
-          ? scriptOutput.value + '\n--- Tests ---\n' + testOutput
+      // Tests Script
+      if (tab.request.testScript) {
+        const testOutput = executeScript(tab.request.testScript, tab.response)
+        tab.scriptOutput = tab.scriptOutput
+          ? tab.scriptOutput + '\n--- Tests ---\n' + testOutput
           : testOutput
       }
 
-      // 記錄歷史（Tauri 環境才寫 SQLite）
+      // 記錄歷史
       if (isTauri) {
         const historyStore = useHistoryStore()
         await historyStore.addEntry({
-          method: activeRequest.value.method,
+          method: tab.request.method,
           url: resolvedUrl,
           status: result.status,
           duration: result.duration,
           requestHeaders: resolvedHeaders,
           requestBody: resolvedBody,
-          response: response.value,
+          response: tab.response,
         })
       }
 
-      // Console 紀錄（永遠記錄）
+      // Console 紀錄
       const consoleStore = useConsoleStore()
       consoleStore.addEntry({
-        method: activeRequest.value.method,
+        method: tab.request.method,
         url: resolvedUrl,
         requestHeaders: resolvedHeaders,
         requestBody: resolvedBody,
@@ -296,73 +366,67 @@ export const useRequestStore = defineStore('request', () => {
         size: result.size,
       })
     } catch (e: any) {
-      error.value = typeof e === 'string' ? e : e.message || 'Unknown error'
+      tab.error = typeof e === 'string' ? e : e.message || 'Unknown error'
 
       // Console 紀錄（錯誤）
       const consoleStore = useConsoleStore()
       consoleStore.addEntry({
-        method: activeRequest.value.method,
-        url: resolvedUrl || activeRequest.value.url,
+        method: tab.request.method,
+        url: resolvedUrl || tab.request.url,
         requestHeaders: resolvedHeaders,
         requestBody: resolvedBody,
         status: 0,
         statusText: 'Error',
         responseHeaders: {},
-        responseBody: error.value || 'Unknown error',
+        responseBody: tab.error || 'Unknown error',
         duration: 0,
         size: 0,
       })
     } finally {
-      activeRequest.value.isSending = false
+      tab.request.isSending = false
+      tabStore.persistTabs()
     }
   }
 
-  /** 載入已存的請求到編輯區 */
-  function loadFromCollection(nodeId: string, request: ActiveRequest['method'] extends string ? any : never) {
-    activeRequest.value = {
-      collectionNodeId: nodeId,
-      method: request.method || 'GET',
-      url: request.url || '',
-      params: request.params || [],
-      headers: request.headers || [
-        { id: crypto.randomUUID(), key: 'Content-Type', value: 'application/json', enabled: true },
-      ],
-      body: request.body || { type: 'none' },
-      auth: request.auth || { type: 'none' },
-      preRequestScript: request.preRequestScript || '',
-      testScript: request.testScript || '',
-      activeTab: 'params',
-      isSending: false,
-    }
-    response.value = null
-    error.value = null
-    lastRequestDetails.value = null
+  /** 載入已存的請求到編輯區（委派到 tabStore） */
+  function loadFromCollection(nodeId: string, request: SavedRequest) {
+    const tabStore = getTabStore()
+    const collectionStore = useCollectionStore()
+    // 從 collection 取得名稱
+    const node = collectionStore.nodes.find((n: any) => n.id === nodeId)
+    const name = node?.name || 'Untitled'
+    tabStore.openFromCollection(nodeId, request, name)
   }
 
   /** 儲存當前請求回 Collection */
   async function saveToCollection() {
-    const nodeId = activeRequest.value.collectionNodeId
+    const tabStore = getTabStore()
+    const tab = tabStore.activeTab
+    if (!tab) return false
+
+    const nodeId = tab.collectionNodeId
     if (!nodeId) return false
+
     const collectionStore = useCollectionStore()
     await collectionStore.updateRequest(nodeId, {
-      method: activeRequest.value.method,
-      url: activeRequest.value.url,
-      params: activeRequest.value.params,
-      headers: activeRequest.value.headers,
-      body: activeRequest.value.body,
-      auth: activeRequest.value.auth,
-      preRequestScript: activeRequest.value.preRequestScript,
-      testScript: activeRequest.value.testScript,
+      method: tab.request.method,
+      url: tab.request.url,
+      params: tab.request.params,
+      headers: tab.request.headers,
+      body: tab.request.body,
+      auth: tab.request.auth,
+      preRequestScript: tab.request.preRequestScript,
+      testScript: tab.request.testScript,
     })
+
+    tabStore.markSaved(tab.id, nodeId)
     return true
   }
 
   /** 重設為空請求 */
   function reset() {
-    activeRequest.value = createEmptyRequest()
-    response.value = null
-    error.value = null
-    lastRequestDetails.value = null
+    const tabStore = getTabStore()
+    tabStore.createTab()
   }
 
   return {

@@ -157,6 +157,89 @@ export const useCollectionStore = defineStore('collection', () => {
     if (node) node.isExpanded = !node.isExpanded
   }
 
+  /**
+   * 拖曳移動節點
+   * @param dragId 被拖曳的節點 ID
+   * @param targetId 目標節點 ID
+   * @param position 'before' | 'after' | 'inside'
+   *   - before/after：插入到 target 的前面/後面（同層）
+   *   - inside：放進 target 裡面（target 必須是 collection/folder）
+   */
+  async function moveNode(dragId: string, targetId: string, position: 'before' | 'after' | 'inside') {
+    const dragNode = nodes.value.find(n => n.id === dragId)
+    const targetNode = nodes.value.find(n => n.id === targetId)
+    if (!dragNode || !targetNode) return
+
+    // 不能把節點放進自己或自己的子孫
+    function isDescendant(parentId: string, childId: string): boolean {
+      const children = nodes.value.filter(n => n.parentId === parentId)
+      for (const c of children) {
+        if (c.id === childId) return true
+        if (isDescendant(c.id, childId)) return true
+      }
+      return false
+    }
+    if (dragId === targetId) return
+    if (isDescendant(dragId, targetId)) return
+
+    let newParentId: string | null
+    let insertIndex: number
+
+    if (position === 'inside') {
+      // 放進目標容器裡（末尾）
+      newParentId = targetId
+      const siblings = nodes.value.filter(n => n.parentId === targetId)
+      insertIndex = siblings.length
+      // 自動展開目標
+      targetNode.isExpanded = true
+    } else {
+      // before/after：與 target 同層
+      newParentId = targetNode.parentId
+      const siblings = nodes.value
+        .filter(n => n.parentId === newParentId)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+      const targetIdx = siblings.findIndex(n => n.id === targetId)
+      insertIndex = position === 'before' ? targetIdx : targetIdx + 1
+    }
+
+    // 不允許 request 成為頂層節點
+    if (dragNode.type === 'request' && newParentId === null) return
+    // collection 不能放進別的節點裡
+    if (dragNode.type === 'collection' && newParentId !== null) return
+
+    // 更新 parentId
+    dragNode.parentId = newParentId
+
+    // 如果是頂層 collection 移動，保留 workspaceId
+    // 如果是子節點移動到另一個 collection 下，workspaceId 由父節點決定
+
+    // 重新計算同層所有兄弟的 sortOrder
+    const siblings = nodes.value
+      .filter(n => n.parentId === newParentId && n.id !== dragId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+
+    // 插入 dragNode 到正確位置
+    siblings.splice(insertIndex, 0, dragNode)
+
+    // 更新 sortOrder
+    siblings.forEach((n, i) => {
+      n.sortOrder = i
+    })
+
+    // 持久化到 SQLite
+    if (isTauri) {
+      const db = await getDb()
+      for (const n of siblings) {
+        await db.execute(
+          'UPDATE collection_nodes SET parent_id = ?, sort_order = ?, updated_at = datetime("now") WHERE id = ?',
+          [n.parentId, n.sortOrder, n.id],
+        )
+      }
+    }
+
+    scheduleSyncToCloud()
+  }
+
   /** 批次匯入節點（Postman Import 用） */
   async function importNodes(newNodes: CollectionNode[]) {
     // 匯入的頂層 collection 節點帶入當前 workspace
@@ -442,6 +525,7 @@ export const useCollectionStore = defineStore('collection', () => {
     updateRequest,
     toggleExpand,
     importNodes,
+    moveNode,
     pushToCloud,
     pullFromCloud,
     applyRemoteUpdate,

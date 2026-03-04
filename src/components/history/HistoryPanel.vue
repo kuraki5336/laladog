@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useHistoryStore } from '@/stores/historyStore'
-import { useRequestStore } from '@/stores/requestStore'
+import { useTabStore } from '@/stores/tabStore'
 
 const historyStore = useHistoryStore()
-const requestStore = useRequestStore()
+const tabStore = useTabStore()
 
 onMounted(() => {
   historyStore.loadAll()
@@ -25,9 +25,13 @@ function statusColor(status: number): string {
 }
 
 function loadEntry(entry: typeof historyStore.entries[number]) {
-  requestStore.activeRequest.method = entry.method
-  requestStore.activeRequest.url = entry.url
-  requestStore.response = entry.response
+  tabStore.openFromHistory({
+    method: entry.method,
+    url: entry.url,
+    requestHeaders: entry.requestHeaders,
+    requestBody: entry.requestBody,
+    response: entry.response,
+  })
 }
 
 function formatTime(timestamp: string): string {

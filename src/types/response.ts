@@ -8,6 +8,8 @@ export interface HttpResponse {
   duration: number
   /** Body 大小（bytes） */
   size: number
+  /** Body 編碼方式，二進位回應為 base64 */
+  bodyEncoding?: 'text' | 'base64'
 }
 
 /** 回應面板的顯示模式 */

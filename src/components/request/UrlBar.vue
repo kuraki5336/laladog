@@ -2,14 +2,18 @@
 import { computed, ref } from 'vue'
 import { useRequestStore } from '@/stores/requestStore'
 import { useEnvironmentStore } from '@/stores/environmentStore'
+import { useTabStore } from '@/stores/tabStore'
 import { resolveVariables } from '@/utils/variableResolver'
 import { generateCurl } from '@/utils/curlGenerator'
+import SaveToCollectionDialog from '@/components/collection/SaveToCollectionDialog.vue'
 import type { HttpMethod } from '@/types'
 
 const store = useRequestStore()
 const envStore = useEnvironmentStore()
+const tabStore = useTabStore()
 const saveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
 const curlStatus = ref<'idle' | 'copied'>('idle')
+const showSaveDialog = ref(false)
 
 async function handleSave() {
   saveStatus.value = 'saving'
@@ -130,15 +134,24 @@ const methodColors: Record<string, string> = {
         @keyup.enter="store.sendRequest()"
       />
 
-      <!-- Save Button (僅在從 Collection 載入時顯示) -->
+      <!-- Save Button -->
       <button
-        v-if="store.activeRequest.collectionNodeId"
+        v-if="tabStore.activeTab?.collectionNodeId"
         class="h-9 rounded-button border border-border px-3 text-sm font-medium transition-all hover:bg-bg-stripe active:scale-[0.97] disabled:opacity-50"
         :class="saveStatus === 'saved' ? 'text-success border-success' : 'text-text-secondary'"
         :disabled="saveStatus === 'saving'"
         @click="handleSave"
       >
         {{ saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save' }}
+      </button>
+
+      <!-- Save As (未儲存的 tab) -->
+      <button
+        v-else
+        class="h-9 rounded-button border border-border px-3 text-sm font-medium text-text-secondary transition-all hover:bg-bg-stripe active:scale-[0.97]"
+        @click="showSaveDialog = true"
+      >
+        Save
       </button>
 
       <!-- cURL Button -->
@@ -164,5 +177,13 @@ const methodColors: Record<string, string> = {
     <div v-if="resolvedUrl" class="border-b border-border px-3 py-1">
       <span class="text-[11px] text-text-muted truncate block">&rarr; {{ resolvedUrl }}</span>
     </div>
+
+    <!-- Save To Collection Dialog -->
+    <SaveToCollectionDialog
+      v-if="showSaveDialog && tabStore.activeTabId"
+      :tab-id="tabStore.activeTabId"
+      @close="showSaveDialog = false"
+      @saved="showSaveDialog = false"
+    />
   </div>
 </template>

@@ -1,10 +1,33 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import TabBar from './TabBar.vue'
 import RequestPanel from '@/components/request/RequestPanel.vue'
 import ResponsePanel from '@/components/response/ResponsePanel.vue'
 import WebSocketPanel from '@/components/request/WebSocketPanel.vue'
+import { useTabStore } from '@/stores/tabStore'
 
 const mode = ref<'http' | 'websocket'>('http')
+const tabStore = useTabStore()
+
+function handleKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+    e.preventDefault()
+    tabStore.createTab()
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+    e.preventDefault()
+    if (tabStore.activeTabId) tabStore.closeTab(tabStore.activeTabId)
+  }
+}
+
+onMounted(() => {
+  tabStore.init()
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -26,6 +49,9 @@ const mode = ref<'http' | 'websocket'>('http')
         WebSocket
       </button>
     </div>
+
+    <!-- Tab Bar (HTTP mode only) -->
+    <TabBar v-if="mode === 'http'" />
 
     <template v-if="mode === 'http'">
       <!-- Request Area -->
