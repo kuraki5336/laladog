@@ -143,6 +143,54 @@ function confirmClose() {
     showCloseConfirm.value = null
   }
 }
+
+/* ── Context Menu ── */
+const contextMenuTabId = ref<string | null>(null)
+const contextMenuPos = ref({ x: 0, y: 0 })
+
+function openContextMenu(e: MouseEvent, tabId: string) {
+  contextMenuTabId.value = tabId
+  contextMenuPos.value = { x: e.clientX, y: e.clientY }
+}
+
+function closeContextMenu() {
+  contextMenuTabId.value = null
+}
+
+function contextCloseOthers() {
+  if (contextMenuTabId.value) {
+    tabStore.closeOtherTabs(contextMenuTabId.value)
+  }
+  closeContextMenu()
+}
+
+function contextCloseRight() {
+  if (contextMenuTabId.value) {
+    tabStore.closeTabsToRight(contextMenuTabId.value)
+  }
+  closeContextMenu()
+}
+
+function contextDuplicate() {
+  if (contextMenuTabId.value) {
+    tabStore.duplicateTab(contextMenuTabId.value)
+  }
+  closeContextMenu()
+}
+
+function contextClose() {
+  if (contextMenuTabId.value) {
+    handleClose(contextMenuTabId.value)
+  }
+  closeContextMenu()
+}
+
+function contextRename() {
+  if (contextMenuTabId.value) {
+    startRename(contextMenuTabId.value)
+  }
+  closeContextMenu()
+}
 </script>
 
 <template>
@@ -163,6 +211,7 @@ function confirmClose() {
         ]"
         :style="dropTargetId === tab.id ? 'box-shadow: -3px 0 0 0 var(--color-secondary) inset' : ''"
         @mousedown="onTabMouseDown($event, tab.id)"
+        @contextmenu.prevent="openContextMenu($event, tab.id)"
       >
         <!-- Method badge -->
         <span
@@ -211,6 +260,34 @@ function confirmClose() {
       +
     </button>
   </div>
+
+  <!-- Context Menu -->
+  <Teleport to="body">
+    <div v-if="contextMenuTabId" class="fixed inset-0 z-40" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
+    <div
+      v-if="contextMenuTabId"
+      class="fixed z-50 w-44 rounded-lg border border-border bg-bg-card py-1 shadow-xl"
+      :style="{ left: contextMenuPos.x + 'px', top: contextMenuPos.y + 'px' }"
+    >
+      <button class="flex w-full items-center px-3 py-1.5 text-xs text-text-primary hover:bg-bg-hover" @click="contextRename">
+        Rename
+      </button>
+      <button class="flex w-full items-center px-3 py-1.5 text-xs text-text-primary hover:bg-bg-hover" @click="contextDuplicate">
+        Duplicate
+      </button>
+      <div class="my-1 border-t border-border" />
+      <button class="flex w-full items-center px-3 py-1.5 text-xs text-text-primary hover:bg-bg-hover" @click="contextCloseOthers">
+        Close Others
+      </button>
+      <button class="flex w-full items-center px-3 py-1.5 text-xs text-text-primary hover:bg-bg-hover" @click="contextCloseRight">
+        Close to the Right
+      </button>
+      <div class="my-1 border-t border-border" />
+      <button class="flex w-full items-center px-3 py-1.5 text-xs text-danger hover:bg-bg-hover" @click="contextClose">
+        Close
+      </button>
+    </div>
+  </Teleport>
 
   <!-- Close Confirm Dialog -->
   <Teleport to="body">

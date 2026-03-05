@@ -36,14 +36,21 @@ export const useEnvironmentStore = defineStore('environment', () => {
     return await Database.load('sqlite:laladog.db')
   }
 
-  /** 載入所有環境 */
+  /** 載入當前 workspace 的環境 */
   async function loadAll() {
     if (!isTauri) return
     const db = await getDb()
+    const wsStore = useWorkspaceStore()
+    const wsId = wsStore.activeWorkspace?.id
 
-    // 載入環境
-    const envRows = await db.select<any[]>('SELECT * FROM environments ORDER BY name')
-    const varRows = await db.select<any[]>('SELECT * FROM env_variables')
+    // 載入該 workspace 的環境
+    const envRows = wsId
+      ? await db.select<any[]>('SELECT * FROM environments WHERE workspace_id = ? ORDER BY name', [wsId])
+      : await db.select<any[]>('SELECT * FROM environments ORDER BY name')
+    const envIds = envRows.map((e: any) => e.id)
+    const varRows = envIds.length > 0
+      ? await db.select<any[]>(`SELECT * FROM env_variables WHERE environment_id IN (${envIds.map(() => '?').join(',')})`, envIds)
+      : []
 
     environments.value = envRows.map((e) => ({
       id: e.id,
@@ -69,12 +76,14 @@ export const useEnvironmentStore = defineStore('environment', () => {
     }))
   }
 
-  /** 新增環境 */
+  /** 新增環境（歸屬當前 workspace） */
   async function addEnvironment(name: string) {
     const id = crypto.randomUUID()
+    const wsStore = useWorkspaceStore()
+    const wsId = wsStore.activeWorkspace?.id || null
     if (isTauri) {
       const db = await getDb()
-      await db.execute('INSERT INTO environments (id, name) VALUES (?, ?)', [id, name])
+      await db.execute('INSERT INTO environments (id, name, workspace_id) VALUES (?, ?, ?)', [id, name, wsId])
     }
     environments.value.push({ id, name, isActive: false, variables: [] })
     return id

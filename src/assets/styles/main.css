@@ -114,6 +114,24 @@ body {
   --color-border-light: #1E293B;
   --color-border-focus: #3298DC;
 
+  /* Primary 深色模式：反轉為亮色調 */
+  --color-primary-10: #0E3F6B;
+  --color-primary-20: #17578A;
+  --color-primary-30: #1F6DA6;
+  --color-primary-40: #2882C2;
+  --color-primary-50: #5BB0E4;
+  --color-primary: #8DC8ED;
+  --color-primary-70: #A3D4F2;
+  --color-primary-80: #C4E2F6;
+  --color-primary-90: #E8F4FC;
+
+  /* Secondary 深色模式：淺色調變深色底 */
+  --color-secondary-10: rgba(50, 152, 220, 0.15);
+  --color-secondary-20: rgba(50, 152, 220, 0.25);
+  --color-secondary-30: #1F6DA6;
+  --color-secondary-40: #2882C2;
+
+  /* 功能色淺底 */
   --color-success-light: #14532D;
   --color-warning-light: #422006;
   --color-danger-light: #450A0A;

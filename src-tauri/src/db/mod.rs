@@ -96,3 +96,16 @@ UPDATE workspaces SET active_environment_id = (
     SELECT id FROM environments WHERE is_active = 1 LIMIT 1
 );
 "#;
+
+pub const MIGRATION_V5_SQL: &str = r#"
+-- environments 加入 workspace_id，讓每個環境歸屬特定 workspace
+ALTER TABLE environments ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE CASCADE;
+
+-- 將既有環境指派給目前啟用的 workspace
+UPDATE environments SET workspace_id = (
+    SELECT id FROM workspaces WHERE is_active = 1 LIMIT 1
+);
+
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_env_workspace ON environments(workspace_id);
+"#;

@@ -140,11 +140,20 @@ async function handleExport() {
   }
 }
 
+const contextMenuPos = ref({ x: 0, y: 0 })
+
 function handleContextMenu(e: MouseEvent) {
   e.preventDefault()
   if (props.canEdit) {
+    contextMenuPos.value = { x: e.clientX, y: e.clientY }
     showContextMenu.value = !showContextMenu.value
   }
+}
+
+function openContextMenuFromButton(e: MouseEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  contextMenuPos.value = { x: rect.left, y: rect.bottom + 4 }
+  showContextMenu.value = !showContextMenu.value
 }
 </script>
 
@@ -186,8 +195,12 @@ function handleContextMenu(e: MouseEvent) {
       </span>
 
       <!-- Icon (for collections/folders) -->
-      <span v-if="node.type === 'collection'" class="shrink-0">📦</span>
-      <span v-else-if="node.type === 'folder'" class="shrink-0">📁</span>
+      <svg v-if="node.type === 'collection'" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+      </svg>
+      <svg v-else-if="node.type === 'folder'" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+      </svg>
 
       <!-- Name -->
       <input
@@ -214,52 +227,57 @@ function handleContextMenu(e: MouseEvent) {
       <button
         v-if="canEdit"
         class="shrink-0 px-1 text-text-muted opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-100"
-        @click.stop="showContextMenu = !showContextMenu"
+        @click.stop="openContextMenuFromButton($event)"
       >
         ⋯
       </button>
     </div>
 
-    <!-- Context Menu -->
-    <div
-      v-if="showContextMenu && canEdit"
-      class="ml-4 rounded-sm border border-border bg-bg-card py-1 shadow-md"
-      :style="{ marginLeft: `${depth * 16 + 20}px` }"
-    >
-      <button
-        v-if="node.type !== 'request'"
-        class="block w-full px-3 py-1 text-left text-xs hover:bg-bg-hover"
-        @click="showAddChild = true; showContextMenu = false"
+    <!-- Context Menu (floating) -->
+    <Teleport to="body">
+      <div v-if="showContextMenu && canEdit" class="fixed inset-0 z-40" @click="showContextMenu = false" @contextmenu.prevent="showContextMenu = false" />
+      <div
+        v-if="showContextMenu && canEdit"
+        class="fixed z-50 w-40 rounded-lg border border-border bg-bg-card py-1 shadow-xl"
+        :style="{ left: contextMenuPos.x + 'px', top: contextMenuPos.y + 'px' }"
       >
-        Add Request
-      </button>
-      <button
-        v-if="node.type !== 'request'"
-        class="block w-full px-3 py-1 text-left text-xs hover:bg-bg-hover"
-        @click="store.addNode('New Folder', 'folder', node.id); showContextMenu = false"
-      >
-        Add Folder
-      </button>
-      <button
-        v-if="node.type === 'collection'"
-        class="block w-full px-3 py-1 text-left text-xs hover:bg-bg-hover"
-        @click="handleExport"
-      >
-        Export
-      </button>
-      <button
-        class="block w-full px-3 py-1 text-left text-xs hover:bg-bg-hover"
-        @click="startRename"
-      >
-        Rename
-      </button>
-      <button
-        class="block w-full px-3 py-1 text-left text-xs text-danger hover:bg-danger-light"
-        @click="store.deleteNode(node.id); showContextMenu = false"
-      >
-        Delete
-      </button>
-    </div>
+        <button
+          v-if="node.type !== 'request'"
+          class="flex w-full items-center px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+          @click="showAddChild = true; showContextMenu = false"
+        >
+          Add Request
+        </button>
+        <button
+          v-if="node.type !== 'request'"
+          class="flex w-full items-center px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+          @click="store.addNode('New Folder', 'folder', node.id); showContextMenu = false"
+        >
+          Add Folder
+        </button>
+        <button
+          v-if="node.type === 'collection'"
+          class="flex w-full items-center px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+          @click="handleExport"
+        >
+          Export
+        </button>
+        <div v-if="node.type !== 'request'" class="my-1 border-t border-border" />
+        <button
+          class="flex w-full items-center px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+          @click="startRename"
+        >
+          Rename
+        </button>
+        <div class="my-1 border-t border-border" />
+        <button
+          class="flex w-full items-center px-3 py-1.5 text-left text-xs text-danger hover:bg-bg-hover"
+          @click="store.deleteNode(node.id); showContextMenu = false"
+        >
+          Delete
+        </button>
+      </div>
+    </Teleport>
 
     <!-- Add Child Form -->
     <div

@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTeamStore } from '@/stores/teamStore'
 import { useTabStore } from '@/stores/tabStore'
 import { parsePostmanCollection } from '@/utils/postmanImporter'
+import { parseOpenAPISpec, isOpenAPISpec } from '@/utils/openapiImporter'
 import { exportToPostmanV21 } from '@/utils/postmanExporter'
 import CollectionItem from './CollectionItem.vue'
 
@@ -166,8 +167,23 @@ async function handleImportFile(e: Event) {
 
   try {
     const text = await file.text()
-    const json = JSON.parse(text)
-    const nodes = parsePostmanCollection(json)
+    let data: any
+
+    // 嘗試 JSON 解析，失敗則嘗試 YAML
+    try {
+      data = JSON.parse(text)
+    } catch {
+      const yaml = await import('js-yaml')
+      data = yaml.load(text)
+    }
+
+    // 自動判斷格式：OpenAPI/Swagger 或 Postman
+    let nodes
+    if (isOpenAPISpec(data)) {
+      nodes = parseOpenAPISpec(data)
+    } else {
+      nodes = parsePostmanCollection(data)
+    }
     await store.importNodes(nodes)
   } catch (err: any) {
     importError.value = err.message || 'Failed to import'
@@ -243,7 +259,7 @@ async function handleExportAll() {
     <input
       ref="fileInput"
       type="file"
-      accept=".json"
+      accept=".json,.yaml,.yml"
       class="hidden"
       @change="handleImportFile"
     />
@@ -310,7 +326,7 @@ async function handleExportAll() {
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
             </svg>
-            Import Postman
+            Import Collection
           </button>
           <button
             class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"

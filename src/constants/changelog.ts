@@ -6,6 +6,21 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.5',
+    date: '2026-03-05',
+    changes: [
+      'Request 分頁右鍵選單（關閉其他 / 關閉右側 / 複製分頁 / 重新命名）',
+      'Collection 匯入 OpenAPI 3.x / Swagger 2.0（支援 JSON + YAML）',
+      'Response Body 搜尋功能（Ctrl+F 高亮 + 上下跳轉）',
+      'JSON Response 樹狀收合/展開檢視',
+      '深色模式色彩對比修正（Primary/Secondary 色系全面調整）',
+      '修正 Collection 右鍵選單推擠側邊欄問題（改為浮動式選單）',
+      '修正 URL 輸入框變數高亮層級導致文字不可見問題',
+      '更新應用程式圖示（新版 Logo）',
+      '側邊欄 Collection / Folder 圖示改為 SVG（統一 Heroicons 風格）',
+    ],
+  },
+  {
     version: 'v0.3.4',
     date: '2026-03-05',
     changes: [

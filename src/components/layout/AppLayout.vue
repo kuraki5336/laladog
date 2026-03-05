@@ -15,6 +15,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTeamStore } from '@/stores/teamStore'
 import { useCollectionStore } from '@/stores/collectionStore'
+import { useEnvironmentStore } from '@/stores/environmentStore'
 import { useSyncStore } from '@/stores/syncStore'
 import { checkForUpdate, type UpdateInfo } from '@/utils/updater'
 
@@ -23,10 +24,12 @@ const authStore = useAuthStore()
 const wsStore = useWorkspaceStore()
 const teamStore = useTeamStore()
 const collectionStore = useCollectionStore()
+const envStore = useEnvironmentStore()
 const syncStore = useSyncStore()
 const showAboutDialog = ref(false)
 const showSponsorDialog = ref(false)
 const showUpdateDialog = ref(false)
+const showUserMenu = ref(false)
 // 使用 shallowRef 避免 Vue Proxy 包裹 Update 物件
 // （Update class 使用 ES6 private fields，Proxy 無法存取）
 const updateInfo = shallowRef<UpdateInfo | null>(null)
@@ -35,6 +38,7 @@ onMounted(async () => {
   themeStore.init()
   authStore.init()
   await wsStore.loadAll()
+  await envStore.loadAll()
   await collectionStore.loadAll()
 
   // 已登入 → 同步團隊 collections + 建立 WebSocket
@@ -62,7 +66,15 @@ watch(
   },
 )
 
-// 監聽 activeWorkspace 切換 → 斷舊連新
+// 監聽 activeWorkspace 切換 → 重載環境 + 斷舊連新
+watch(
+  () => wsStore.activeWorkspace?.id,
+  (newId, oldId) => {
+    if (newId === oldId) return
+    envStore.loadAll()
+  },
+)
+
 watch(
   () => wsStore.activeWorkspace?.teamId,
   (newTeamId, oldTeamId) => {
@@ -163,20 +175,37 @@ async function manualCheckUpdate() {
         </button>
 
         <!-- User / Login -->
-        <div v-if="authStore.isLoggedIn" class="flex items-center gap-2">
+        <div v-if="authStore.isLoggedIn" class="relative">
           <img
             v-if="authStore.user?.picture"
             :src="authStore.user.picture"
             :alt="authStore.user.name"
-            class="h-7 w-7 rounded-full border border-border"
+            class="h-7 w-7 cursor-pointer rounded-full border border-border transition-opacity hover:opacity-80"
+            @click="showUserMenu = !showUserMenu"
           />
-          <span class="text-xs text-text-secondary">{{ authStore.user?.name }}</span>
-          <button
-            class="text-xs text-text-muted hover:text-danger"
-            @click="authStore.logout"
+          <Teleport to="body">
+            <div v-if="showUserMenu" class="fixed inset-0 z-40" @click="showUserMenu = false" />
+          </Teleport>
+          <div
+            v-if="showUserMenu"
+            class="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border border-border bg-bg-card py-1 shadow-lg"
           >
-            Logout
-          </button>
+            <div class="px-3 py-2">
+              <div class="text-xs font-medium text-text-primary">{{ authStore.user?.name }}</div>
+              <div class="text-xs text-text-muted">{{ authStore.user?.email }}</div>
+            </div>
+            <div class="border-t border-border" />
+            <button
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+              @click="authStore.logout(); showUserMenu = false"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M6 10a.75.75 0 01.75-.75h9.546l-1.048-.943a.75.75 0 111.004-1.114l2.5 2.25a.75.75 0 010 1.114l-2.5 2.25a.75.75 0 11-1.004-1.114l1.048-.943H6.75A.75.75 0 016 10z" clip-rule="evenodd" />
+              </svg>
+              登出
+            </button>
+          </div>
         </div>
         <div v-else class="flex items-center gap-2">
           <span v-if="authStore.loginError" class="max-w-48 truncate text-xs text-danger" :title="authStore.loginError">

@@ -6,17 +6,22 @@ const model = defineModel<string>({ default: '' })
 withDefaults(defineProps<{
   placeholder?: string
   inputClass?: string
+  multiline?: boolean
+  rows?: number
 }>(), {
   placeholder: '',
   inputClass: '',
+  multiline: false,
+  rows: 3,
 })
 
 const emit = defineEmits<{
   enter: []
 }>()
 
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 const scrollLeft = ref(0)
+const scrollTop = ref(0)
 
 const hasVars = computed(() => (model.value || '').includes('{{'))
 
@@ -47,6 +52,7 @@ const segments = computed(() => {
 function syncScroll() {
   if (inputRef.value) {
     scrollLeft.value = inputRef.value.scrollLeft
+    scrollTop.value = inputRef.value.scrollTop
   }
 }
 
@@ -55,8 +61,20 @@ defineExpose({ focus: () => inputRef.value?.focus() })
 
 <template>
   <div class="var-input-wrap">
-    <!-- Actual input -->
+    <!-- Multiline textarea -->
+    <textarea
+      v-if="multiline"
+      ref="inputRef"
+      v-model="model"
+      :class="inputClass"
+      :placeholder="placeholder"
+      :rows="rows"
+      :style="hasVars ? 'color: transparent; caret-color: var(--color-text-primary, #333); resize: vertical;' : 'resize: vertical;'"
+      @scroll="syncScroll"
+    />
+    <!-- Single-line input -->
     <input
+      v-else
       ref="inputRef"
       v-model="model"
       type="text"
@@ -70,9 +88,9 @@ defineExpose({ focus: () => inputRef.value?.focus() })
     <div
       v-if="hasVars"
       class="var-overlay"
-      :class="inputClass"
+      :class="[inputClass, { 'var-overlay--multiline': multiline }]"
     >
-      <div class="var-segments" :style="{ transform: `translateX(-${scrollLeft}px)` }">
+      <div class="var-segments" :class="{ 'var-segments--multiline': multiline }" :style="{ transform: `translate(-${scrollLeft}px, -${scrollTop}px)` }">
         <span
           v-for="(seg, idx) in segments"
           :key="idx"
@@ -88,7 +106,8 @@ defineExpose({ focus: () => inputRef.value?.focus() })
   position: relative;
 }
 
-.var-input-wrap input {
+.var-input-wrap input,
+.var-input-wrap textarea {
   width: 100%;
   position: relative;
   z-index: 1;
@@ -105,15 +124,26 @@ defineExpose({ focus: () => inputRef.value?.focus() })
   overflow: hidden;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 0;
+  z-index: 2;
   /* Override visual-only styles from inputClass */
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
 }
 
+.var-overlay--multiline {
+  align-items: flex-start;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .var-segments {
   white-space: nowrap;
+}
+
+.var-segments--multiline {
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .var-highlight {

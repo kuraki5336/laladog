@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "tauri-dev",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["tauri", "dev"],
-      "port": 1420
+      "runtimeExecutable": "C:/nvm4w/nodejs/npm.cmd",
+      "runtimeArgs": ["run", "dev"],
+      "port": 1420,
+      "autoPort": false
     }
   ]
 }

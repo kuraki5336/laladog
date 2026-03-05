@@ -30,6 +30,12 @@ pub fn run() {
             sql: db::MIGRATION_V4_SQL,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "add workspace_id to environments for per-workspace isolation",
+            sql: db::MIGRATION_V5_SQL,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

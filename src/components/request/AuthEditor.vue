@@ -49,6 +49,8 @@ watch(() => store.activeRequest.auth.type, (newType) => {
         v-model="store.activeRequest.auth.bearer!.token"
         input-class="w-full rounded-button border border-border px-3 py-2 font-mono text-xs outline-none focus:border-border-focus"
         placeholder="Enter token"
+        multiline
+        :rows="5"
       />
     </div>
 

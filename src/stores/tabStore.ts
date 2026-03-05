@@ -315,6 +315,49 @@ export const useTabStore = defineStore('tab', () => {
     }
   }
 
+  /** 關閉其他 tab（保留 keepId） */
+  function closeOtherTabs(keepId: string) {
+    tabs.value = tabs.value.filter(t => t.id === keepId)
+    activeTabId.value = keepId
+    persistTabs()
+  }
+
+  /** 關閉右側所有 tab */
+  function closeTabsToRight(tabId: string) {
+    const index = tabs.value.findIndex(t => t.id === tabId)
+    if (index === -1) return
+    tabs.value = tabs.value.slice(0, index + 1)
+    // 若 activeTab 被關閉，切到目標 tab
+    if (!tabs.value.find(t => t.id === activeTabId.value)) {
+      activeTabId.value = tabId
+    }
+    persistTabs()
+  }
+
+  /** 複製 tab */
+  function duplicateTab(tabId: string) {
+    const source = tabs.value.find(t => t.id === tabId)
+    if (!source) return
+    const id = crypto.randomUUID()
+    const tab: TabState = {
+      id,
+      title: `${source.title} (copy)`,
+      request: JSON.parse(JSON.stringify(source.request)),
+      response: null,
+      error: null,
+      scriptOutput: '',
+      lastRequestDetails: null,
+      isDirty: false,
+      collectionNodeId: null,
+      savedSnapshot: null,
+    }
+    // 插入到原 tab 右側
+    const sourceIndex = tabs.value.findIndex(t => t.id === tabId)
+    tabs.value.splice(sourceIndex + 1, 0, tab)
+    activeTabId.value = id
+    persistTabs()
+  }
+
   /** 拖曳排序：將 dragId 移到 targetId 的位置前方 */
   function moveTab(dragId: string, targetId: string) {
     const fromIndex = tabs.value.findIndex(t => t.id === dragId)
@@ -342,5 +385,8 @@ export const useTabStore = defineStore('tab', () => {
     snapshotRequest,
     persistTabs,
     moveTab,
+    closeOtherTabs,
+    closeTabsToRight,
+    duplicateTab,
   }
 })
