@@ -15,6 +15,7 @@ export const changelog: ChangelogEntry[] = [
       'Response 另存新檔 (Save to File)',
       'cURL 複製移至次要選單',
       '漢堡選單 + 關於我們 + 贊助作者',
+      '應用程式自動更新功能',
     ],
   },
   {

@@ -6,6 +6,7 @@ import StatusBar from './StatusBar.vue'
 import HamburgerMenu from './HamburgerMenu.vue'
 import AboutDialog from './AboutDialog.vue'
 import SponsorDialog from './SponsorDialog.vue'
+import UpdateDialog from './UpdateDialog.vue'
 import EnvSelector from '@/components/environment/EnvSelector.vue'
 import EnvEditor from '@/components/environment/EnvEditor.vue'
 import WorkspaceSelector from '@/components/workspace/WorkspaceSelector.vue'
@@ -15,6 +16,7 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTeamStore } from '@/stores/teamStore'
 import { useCollectionStore } from '@/stores/collectionStore'
 import { useSyncStore } from '@/stores/syncStore'
+import { checkForUpdate, type UpdateInfo } from '@/utils/updater'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
@@ -24,6 +26,8 @@ const collectionStore = useCollectionStore()
 const syncStore = useSyncStore()
 const showAboutDialog = ref(false)
 const showSponsorDialog = ref(false)
+const showUpdateDialog = ref(false)
+const updateInfo = ref<UpdateInfo | null>(null)
 
 onMounted(async () => {
   themeStore.init()
@@ -35,6 +39,9 @@ onMounted(async () => {
   if (authStore.isLoggedIn) {
     await syncTeamCollections()
   }
+
+  // 啟動時靜默檢查更新（有新版才彈窗）
+  silentCheckUpdate()
 })
 
 onUnmounted(() => {
@@ -89,6 +96,32 @@ async function syncTeamCollections() {
     console.error('[AppLayout] Team sync failed:', e)
   }
 }
+
+/** 靜默檢查更新（啟動時用，只在有更新時彈窗） */
+async function silentCheckUpdate() {
+  try {
+    const info = await checkForUpdate()
+    if (info.available) {
+      updateInfo.value = info
+      showUpdateDialog.value = true
+    }
+  } catch {
+    // 靜默模式不顯示錯誤
+  }
+}
+
+/** 手動檢查更新（漢堡選單觸發，無論有無更新都給回饋） */
+async function manualCheckUpdate() {
+  try {
+    const info = await checkForUpdate()
+    updateInfo.value = info
+    showUpdateDialog.value = true
+  } catch (e) {
+    // 手動檢查失敗時，顯示錯誤提示
+    updateInfo.value = { available: false }
+    showUpdateDialog.value = true
+  }
+}
 </script>
 
 <template>
@@ -99,6 +132,7 @@ async function syncTeamCollections() {
         <HamburgerMenu
           @open-about="showAboutDialog = true"
           @open-sponsor="showSponsorDialog = true"
+          @check-update="manualCheckUpdate"
         />
         <img src="@/assets/logo/favicon-192.png" alt="LalaDog" class="h-6 w-6" />
         <span class="text-lg font-bold text-primary">LalaDog</span>
@@ -172,5 +206,14 @@ async function syncTeamCollections() {
     <!-- Dialogs -->
     <AboutDialog v-if="showAboutDialog" @close="showAboutDialog = false" />
     <SponsorDialog v-if="showSponsorDialog" @close="showSponsorDialog = false" />
+    <UpdateDialog
+      v-if="showUpdateDialog && updateInfo"
+      :version="updateInfo.available ? (updateInfo.version ?? '') : ''"
+      :body="updateInfo.body"
+      :date="updateInfo.date"
+      :update="updateInfo.update"
+      :no-update="!updateInfo.available"
+      @close="showUpdateDialog = false"
+    />
   </div>
 </template>

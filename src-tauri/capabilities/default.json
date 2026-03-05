@@ -17,6 +17,8 @@
     "dialog:allow-open",
     "fs:default",
     "fs:allow-write-file",
-    "fs:allow-write-text-file"
+    "fs:allow-write-text-file",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
