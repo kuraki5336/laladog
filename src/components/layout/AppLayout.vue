@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import Sidebar from './Sidebar.vue'
 import MainPanel from './MainPanel.vue'
 import StatusBar from './StatusBar.vue'
@@ -27,7 +27,9 @@ const syncStore = useSyncStore()
 const showAboutDialog = ref(false)
 const showSponsorDialog = ref(false)
 const showUpdateDialog = ref(false)
-const updateInfo = ref<UpdateInfo | null>(null)
+// 使用 shallowRef 避免 Vue Proxy 包裹 Update 物件
+// （Update class 使用 ES6 private fields，Proxy 無法存取）
+const updateInfo = shallowRef<UpdateInfo | null>(null)
 
 onMounted(async () => {
   themeStore.init()
@@ -117,8 +119,11 @@ async function manualCheckUpdate() {
     updateInfo.value = info
     showUpdateDialog.value = true
   } catch (e) {
-    // 手動檢查失敗時，顯示錯誤提示
-    updateInfo.value = { available: false }
+    // 手動檢查失敗時，顯示錯誤訊息
+    updateInfo.value = {
+      available: false,
+      error: e instanceof Error ? e.message : String(e),
+    }
     showUpdateDialog.value = true
   }
 }
@@ -213,6 +218,7 @@ async function manualCheckUpdate() {
       :date="updateInfo.date"
       :update="updateInfo.update"
       :no-update="!updateInfo.available"
+      :error="updateInfo.error"
       @close="showUpdateDialog = false"
     />
   </div>

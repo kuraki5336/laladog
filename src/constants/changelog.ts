@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.3',
+    date: '2026-03-05',
+    changes: [
+      '自動更新修正：repo 改為 Public 以支援 release 下載',
+      '更新檢查失敗時顯示錯誤訊息（不再誤顯示「已是最新版本」）',
+    ],
+  },
+  {
     version: 'v0.3.2',
     date: '2026-03-05',
     changes: [

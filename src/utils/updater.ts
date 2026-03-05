@@ -7,6 +7,7 @@ export interface UpdateInfo {
   body?: string
   date?: string
   update?: Update
+  error?: string
 }
 
 export interface DownloadProgress {

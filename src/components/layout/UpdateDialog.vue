@@ -11,15 +11,19 @@ const props = defineProps<{
   update?: any
   /** 手動檢查但無更新時為 true */
   noUpdate?: boolean
+  /** 檢查更新時的錯誤訊息 */
+  error?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-type DialogState = 'found' | 'downloading' | 'ready' | 'no-update' | 'error'
+type DialogState = 'found' | 'downloading' | 'ready' | 'no-update' | 'check-error' | 'error'
 
-const state = ref<DialogState>(props.noUpdate ? 'no-update' : 'found')
+const state = ref<DialogState>(
+  props.error ? 'check-error' : props.noUpdate ? 'no-update' : 'found',
+)
 const progress = ref<DownloadProgress>({ downloaded: 0, total: undefined, percent: 0 })
 const errorMessage = ref('')
 const currentVersion = ref('')
@@ -120,6 +124,30 @@ function handleClose() {
                 @click="handleClose"
               >
                 確定
+              </button>
+            </div>
+          </template>
+
+          <!-- ===== State: Check Error (檢查更新失敗) ===== -->
+          <template v-else-if="state === 'check-error'">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/30">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <h2 class="mb-2 text-center text-lg font-bold text-text-primary">檢查更新失敗</h2>
+            <p class="mb-2 text-center text-sm text-text-secondary">
+              無法連線至更新伺服器，請檢查網路連線後再試。
+            </p>
+            <p v-if="error" class="mb-4 rounded bg-bg-page px-3 py-2 text-center text-[11px] text-danger">
+              {{ error }}
+            </p>
+            <div class="flex justify-center">
+              <button
+                class="rounded-button bg-primary px-6 py-2 text-sm font-medium text-text-inverse hover:opacity-90"
+                @click="handleClose"
+              >
+                關閉
               </button>
             </div>
           </template>
