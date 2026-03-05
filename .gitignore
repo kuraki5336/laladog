@@ -54,5 +54,10 @@ coverage
 *.tmp
 nul
 
+# Tauri signing keys
+~/.tauri/
+*.key
+*.key.pub
+
 # Claude Code local settings
 .claude/settings.local.json
