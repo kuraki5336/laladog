@@ -76,13 +76,12 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
         request = request.body(body.clone());
     }
 
-    // Send and measure
+    // Send and measure（計時包含完整回應：headers + body 下載）
     let start = Instant::now();
     let response = request
         .send()
         .await
         .map_err(|e| format!("Request failed: {}", e))?;
-    let duration = start.elapsed().as_millis() as u64;
 
     let status = response.status().as_u16();
     let status_text = response
@@ -93,11 +92,19 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
 
     // Collect response headers
     let mut resp_headers = HashMap::new();
+    let mut header_size: u64 = 0;
     for (key, value) in response.headers() {
         if let Ok(v) = value.to_str() {
+            // 計算 header 在線上的大小（"key: value\r\n"）
+            header_size += (key.as_str().len() + 2 + v.len() + 2) as u64;
             resp_headers.insert(key.to_string(), v.to_string());
         }
     }
+
+    // 取得原始傳輸大小（壓縮後），若 server 有回 content-length 就用它
+    let content_length: Option<u64> = resp_headers
+        .get("content-length")
+        .and_then(|v| v.parse().ok());
 
     // 判斷是否為二進位內容
     let content_type = resp_headers
@@ -106,12 +113,19 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
         .unwrap_or_default();
     let is_binary = is_binary_content_type(&content_type);
 
-    // Read body
+    // Read body（reqwest 會自動解壓 gzip/br/deflate）
     let body_bytes = response
         .bytes()
         .await
         .map_err(|e| format!("Failed to read response body: {}", e))?;
-    let size = body_bytes.len() as u64;
+
+    // 計時到 body 完全讀完才停
+    let duration = start.elapsed().as_millis() as u64;
+
+    // 大小：優先使用 content-length（傳輸大小），加上 header 大小
+    // 這與 Postman 的計算方式一致
+    let body_transfer_size = content_length.unwrap_or(body_bytes.len() as u64);
+    let size = header_size + body_transfer_size;
 
     let (body, body_encoding) = if is_binary {
         (
