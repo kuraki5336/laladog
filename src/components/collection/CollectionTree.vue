@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useTeamStore } from '@/stores/teamStore'
 import { useTabStore } from '@/stores/tabStore'
 import { parsePostmanCollection } from '@/utils/postmanImporter'
+import { exportToPostmanV21 } from '@/utils/postmanExporter'
 import CollectionItem from './CollectionItem.vue'
 
 const store = useCollectionStore()
@@ -199,6 +200,41 @@ function filterTree(nodes: typeof store.tree, filter: string): typeof store.tree
 }
 
 const filteredNodes = computed(() => filterTree(store.tree, searchText.value))
+
+/** 匯出當前 workspace 的所有 collections */
+async function handleExportAll() {
+  showMoreMenu.value = false
+  const wsId = wsStore.activeWorkspace?.id
+  const wsName = wsStore.activeWorkspace?.name || 'collections'
+  if (!wsId) return
+
+  const trees = store.getAllCollectionTrees(wsId)
+  if (trees.length === 0) return
+
+  const combined = trees.map((c) => exportToPostmanV21(c))
+  const jsonStr = JSON.stringify(combined, null, 2)
+  const filename = `${wsName.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, '_')}_collections.json`
+
+  const isTauri = !!(window as any).__TAURI_INTERNALS__
+  if (isTauri) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+    const filePath = await save({
+      defaultPath: filename,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (!filePath) return
+    await writeTextFile(filePath, jsonStr)
+  } else {
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
 </script>
 
 <template>
@@ -275,6 +311,15 @@ const filteredNodes = computed(() => filterTree(store.tree, searchText.value))
               <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
             </svg>
             Import Postman
+          </button>
+          <button
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+            @click="handleExportAll"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-text-muted" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+            </svg>
+            Export All
           </button>
         </div>
       </div>

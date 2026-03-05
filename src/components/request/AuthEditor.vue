@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { useRequestStore } from '@/stores/requestStore'
+import VariableHighlightInput from '@/components/common/VariableHighlightInput.vue'
 
 const store = useRequestStore()
 
@@ -9,6 +11,17 @@ const authTypes = [
   { key: 'basic', label: 'Basic Auth' },
   { key: 'apikey', label: 'API Key' },
 ] as const
+
+/** 切換 auth type 時，自動初始化對應的子物件 */
+watch(() => store.activeRequest.auth.type, (newType) => {
+  if (newType === 'bearer' && !store.activeRequest.auth.bearer) {
+    store.activeRequest.auth.bearer = { token: '' }
+  } else if (newType === 'basic' && !store.activeRequest.auth.basic) {
+    store.activeRequest.auth.basic = { username: '', password: '' }
+  } else if (newType === 'apikey' && !store.activeRequest.auth.apikey) {
+    store.activeRequest.auth.apikey = { key: '', value: '', addTo: 'header' }
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -32,10 +45,9 @@ const authTypes = [
     <!-- Bearer Token -->
     <div v-else-if="store.activeRequest.auth.type === 'bearer'">
       <label class="mb-1 block text-xs font-medium text-text-secondary">Token</label>
-      <input
+      <VariableHighlightInput
         v-model="store.activeRequest.auth.bearer!.token"
-        type="text"
-        class="w-full rounded-button border border-border px-3 py-2 font-mono text-xs outline-none focus:border-border-focus"
+        input-class="w-full rounded-button border border-border px-3 py-2 font-mono text-xs outline-none focus:border-border-focus"
         placeholder="Enter token"
       />
     </div>
@@ -75,10 +87,9 @@ const authTypes = [
       </div>
       <div>
         <label class="mb-1 block text-xs font-medium text-text-secondary">Value</label>
-        <input
+        <VariableHighlightInput
           v-model="store.activeRequest.auth.apikey!.value"
-          type="text"
-          class="w-full rounded-button border border-border px-3 py-2 font-mono text-xs outline-none focus:border-border-focus"
+          input-class="w-full rounded-button border border-border px-3 py-2 font-mono text-xs outline-none focus:border-border-focus"
           placeholder="API Key value"
         />
       </div>

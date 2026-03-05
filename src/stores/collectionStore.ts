@@ -513,6 +513,27 @@ export const useCollectionStore = defineStore('collection', () => {
     }
   }
 
+  /** 取得單一 collection 的完整樹狀結構（含 children） */
+  function getCollectionTree(collectionId: string): CollectionNode | null {
+    const root = nodes.value.find((n) => n.id === collectionId)
+    if (!root) return null
+    return {
+      ...root,
+      children: buildTree(nodes.value, root.id, null),
+    }
+  }
+
+  /** 取得指定 workspace 所有 collections 的樹狀結構 */
+  function getAllCollectionTrees(workspaceId: string): CollectionNode[] {
+    return nodes.value
+      .filter((n) => n.parentId === null && n.workspaceId === workspaceId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((root) => ({
+        ...root,
+        children: buildTree(nodes.value, root.id, null),
+      }))
+  }
+
   return {
     nodes,
     selectedNodeId,
@@ -530,5 +551,7 @@ export const useCollectionStore = defineStore('collection', () => {
     pullFromCloud,
     applyRemoteUpdate,
     serializeWorkspaceCollections,
+    getCollectionTree,
+    getAllCollectionTrees,
   }
 })

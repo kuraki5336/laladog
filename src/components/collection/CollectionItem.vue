@@ -4,6 +4,7 @@ import type { CollectionNode } from '@/types'
 import type { Ref } from 'vue'
 import { useCollectionStore } from '@/stores/collectionStore'
 import { useTabStore } from '@/stores/tabStore'
+import { exportToPostmanV21 } from '@/utils/postmanExporter'
 
 const props = defineProps<{
   node: CollectionNode
@@ -109,6 +110,36 @@ async function addChild(type: 'folder' | 'request') {
   showAddChild.value = false
 }
 
+async function handleExport() {
+  showContextMenu.value = false
+  const collectionTree = store.getCollectionTree(props.node.id)
+  if (!collectionTree) return
+
+  const postmanJson = exportToPostmanV21(collectionTree)
+  const jsonStr = JSON.stringify(postmanJson, null, 2)
+  const filename = `${props.node.name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fff]/g, '_')}.postman_collection.json`
+
+  const isTauri = !!(window as any).__TAURI_INTERNALS__
+  if (isTauri) {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+    const filePath = await save({
+      defaultPath: filename,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (!filePath) return
+    await writeTextFile(filePath, jsonStr)
+  } else {
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
 function handleContextMenu(e: MouseEvent) {
   e.preventDefault()
   if (props.canEdit) {
@@ -208,6 +239,13 @@ function handleContextMenu(e: MouseEvent) {
         @click="store.addNode('New Folder', 'folder', node.id); showContextMenu = false"
       >
         Add Folder
+      </button>
+      <button
+        v-if="node.type === 'collection'"
+        class="block w-full px-3 py-1 text-left text-xs hover:bg-bg-hover"
+        @click="handleExport"
+      >
+        Export
       </button>
       <button
         class="block w-full px-3 py-1 text-left text-xs hover:bg-bg-hover"

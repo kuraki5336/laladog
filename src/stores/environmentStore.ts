@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Environment, EnvVariable } from '@/types'
+import { useWorkspaceStore } from './workspaceStore'
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__
 
@@ -8,7 +9,13 @@ export const useEnvironmentStore = defineStore('environment', () => {
   const environments = ref<Environment[]>([])
   const globalVariables = ref<EnvVariable[]>([])
 
-  const activeEnvironment = computed(() => environments.value.find((e) => e.isActive) || null)
+  /** 依當前 workspace 的 activeEnvironmentId 取得啟用環境 */
+  const activeEnvironment = computed(() => {
+    const wsStore = useWorkspaceStore()
+    const activeEnvId = wsStore.activeWorkspace?.activeEnvironmentId
+    if (!activeEnvId) return null
+    return environments.value.find((e) => e.id === activeEnvId) || null
+  })
 
   /** 合併全域 + 環境變數（環境變數優先） */
   const allVariables = computed(() => {
@@ -73,14 +80,16 @@ export const useEnvironmentStore = defineStore('environment', () => {
     return id
   }
 
-  /** 切換啟用環境 */
+  /** 切換啟用環境（委託 workspaceStore 記錄） */
   async function setActive(id: string) {
-    if (isTauri) {
-      const db = await getDb()
-      await db.execute('UPDATE environments SET is_active = 0')
-      await db.execute('UPDATE environments SET is_active = 1 WHERE id = ?', [id])
-    }
-    environments.value.forEach((e) => (e.isActive = e.id === id))
+    const wsStore = useWorkspaceStore()
+    await wsStore.setActiveEnvironment(id)
+  }
+
+  /** 清除啟用環境（設為 No Environment） */
+  async function clearActive() {
+    const wsStore = useWorkspaceStore()
+    await wsStore.setActiveEnvironment(null)
   }
 
   /** 新增環境變數 */
@@ -128,6 +137,13 @@ export const useEnvironmentStore = defineStore('environment', () => {
       await db.execute('DELETE FROM environments WHERE id = ?', [id])
     }
     environments.value = environments.value.filter((e) => e.id !== id)
+
+    // 如果刪除的環境是當前 workspace 的 active env，在 memory 中清除
+    // （DB 端由 ON DELETE SET NULL 處理）
+    const wsStore = useWorkspaceStore()
+    if (wsStore.activeWorkspace?.activeEnvironmentId === id) {
+      wsStore.activeWorkspace.activeEnvironmentId = null
+    }
   }
 
   /** 匯入 Postman 環境（含變數） */
@@ -149,6 +165,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
     loadAll,
     addEnvironment,
     setActive,
+    clearActive,
     addVariable,
     updateVariable,
     deleteEnvironment,

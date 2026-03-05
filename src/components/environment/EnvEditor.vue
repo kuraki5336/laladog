@@ -124,7 +124,7 @@ async function handleImportEnv(e: Event) {
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-text-primary">{{ env.name }}</span>
               <span
-                v-if="env.isActive"
+                v-if="store.activeEnvironment?.id === env.id"
                 class="rounded-tag bg-success-light px-2 py-0.5 text-[10px] font-medium text-success"
               >
                 Active
@@ -132,7 +132,7 @@ async function handleImportEnv(e: Event) {
             </div>
             <div class="flex gap-2">
               <button
-                v-if="!env.isActive"
+                v-if="store.activeEnvironment?.id !== env.id"
                 class="text-xs text-secondary hover:underline"
                 @click="store.setActive(env.id)"
               >

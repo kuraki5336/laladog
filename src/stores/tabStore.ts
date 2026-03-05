@@ -73,7 +73,7 @@ export const useTabStore = defineStore('tab', () => {
           headers: t.request?.headers?.length
             ? t.request.headers
             : [{ id: crypto.randomUUID(), key: 'Content-Type', value: 'application/json', enabled: true }],
-          body: t.request?.body || { type: 'none' },
+          body: t.request?.body || { type: 'raw', rawType: 'json', raw: '' },
           auth: t.request?.auth || { type: 'none' },
           preRequestScript: t.request?.preRequestScript || '',
           testScript: t.request?.testScript || '',

@@ -6,6 +6,7 @@ import { useTabStore } from '@/stores/tabStore'
 import { resolveVariables } from '@/utils/variableResolver'
 import { generateCurl } from '@/utils/curlGenerator'
 import SaveToCollectionDialog from '@/components/collection/SaveToCollectionDialog.vue'
+import VariableHighlightInput from '@/components/common/VariableHighlightInput.vue'
 import type { HttpMethod } from '@/types'
 
 const store = useRequestStore()
@@ -127,12 +128,12 @@ const methodColors: Record<string, string> = {
       </select>
 
       <!-- URL Input -->
-      <input
+      <VariableHighlightInput
         v-model="store.activeRequest.url"
-        type="text"
-        class="h-9 flex-1 rounded-button border border-border px-3 text-sm outline-none transition-colors focus:border-border-focus"
+        class="flex-1"
+        input-class="h-9 w-full rounded-button border border-border px-3 text-sm outline-none transition-colors focus:border-border-focus"
         placeholder="Enter URL or paste text (e.g. https://api.example.com/users)"
-        @keyup.enter="store.sendRequest()"
+        @enter="store.sendRequest()"
       />
 
       <!-- Save Button -->

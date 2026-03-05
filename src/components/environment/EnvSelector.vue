@@ -18,6 +18,7 @@ onMounted(() => {
       @change="(e) => {
         const val = (e.target as HTMLSelectElement).value
         if (val) store.setActive(val)
+        else store.clearActive()
       }"
     >
       <option value="">No Environment</option>

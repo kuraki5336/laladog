@@ -11,9 +11,9 @@ const store = useRequestStore()
 
 const tabs = [
   { key: 'params', label: 'Params' },
+  { key: 'auth', label: 'Auth' },
   { key: 'headers', label: 'Headers' },
   { key: 'body', label: 'Body' },
-  { key: 'auth', label: 'Auth' },
   { key: 'pre-request', label: 'Pre-request' },
   { key: 'tests', label: 'Tests' },
 ] as const

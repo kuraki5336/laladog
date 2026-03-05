@@ -24,6 +24,12 @@ pub fn run() {
             sql: db::MIGRATION_V3_SQL,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add active_environment_id to workspaces",
+            sql: db::MIGRATION_V4_SQL,
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { KeyValuePair } from '@/types'
+import VariableHighlightInput from './VariableHighlightInput.vue'
 
 const model = defineModel<KeyValuePair[]>({ required: true })
 
@@ -49,9 +50,10 @@ function removeRow(index: number) {
         class="flex-1 rounded-sm border border-border px-2 py-1.5 text-xs outline-none focus:border-border-focus"
         :placeholder="placeholderKey || 'Key'"
       />
-      <input
+      <VariableHighlightInput
         v-model="item.value"
-        class="flex-1 rounded-sm border border-border px-2 py-1.5 text-xs outline-none focus:border-border-focus"
+        class="flex-1"
+        input-class="w-full rounded-sm border border-border px-2 py-1.5 text-xs outline-none focus:border-border-focus"
         :placeholder="placeholderValue || 'Value'"
       />
       <button

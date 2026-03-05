@@ -26,6 +26,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       name: r.name,
       isActive: !!r.is_active,
       teamId: r.team_id || null,
+      activeEnvironmentId: r.active_environment_id || null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }))
@@ -64,6 +65,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       name,
       isActive: true,
       teamId: null,
+      activeEnvironmentId: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     })
@@ -99,6 +101,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       await setActive(workspaces.value[0].id)
     }
     return true
+  }
+
+  /** 設定當前 workspace 的啟用環境 */
+  async function setActiveEnvironment(envId: string | null) {
+    const ws = activeWorkspace.value
+    if (!ws) return
+    if (isTauri) {
+      const db = await getDb()
+      await db.execute(
+        'UPDATE workspaces SET active_environment_id = ?, updated_at = datetime("now") WHERE id = ?',
+        [envId, ws.id],
+      )
+    }
+    ws.activeEnvironmentId = envId
   }
 
   /** 關聯 workspace 到 team */
@@ -144,6 +160,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           name: team.name,
           isActive: false,
           teamId: team.id,
+          activeEnvironmentId: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })
@@ -162,6 +179,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     addWorkspace,
     renameWorkspace,
     deleteWorkspace,
+    setActiveEnvironment,
     linkTeam,
     ensureTeamWorkspaces,
   }

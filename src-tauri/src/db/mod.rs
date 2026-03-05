@@ -86,3 +86,13 @@ pub const MIGRATION_V3_SQL: &str = r#"
 -- workspaces 加入 team_id 欄位（關聯到後端 Team）
 ALTER TABLE workspaces ADD COLUMN team_id TEXT;
 "#;
+
+pub const MIGRATION_V4_SQL: &str = r#"
+-- workspaces 加入 active_environment_id，記錄每個 workspace 啟用的環境
+ALTER TABLE workspaces ADD COLUMN active_environment_id TEXT REFERENCES environments(id) ON DELETE SET NULL;
+
+-- 將目前全域 active 的環境寫入所有 workspace
+UPDATE workspaces SET active_environment_id = (
+    SELECT id FROM environments WHERE is_active = 1 LIMIT 1
+);
+"#;

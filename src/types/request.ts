@@ -27,7 +27,7 @@ export function createEmptyRequest(): ActiveRequest {
     headers: [
       { id: crypto.randomUUID(), key: 'Content-Type', value: 'application/json', enabled: true },
     ],
-    body: { type: 'none' },
+    body: { type: 'raw', rawType: 'json', raw: '' },
     auth: { type: 'none' },
     preRequestScript: '',
     testScript: '',
