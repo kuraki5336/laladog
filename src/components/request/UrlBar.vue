@@ -14,6 +14,7 @@ const tabStore = useTabStore()
 const saveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
 const curlStatus = ref<'idle' | 'copied'>('idle')
 const showSaveDialog = ref(false)
+const showMoreMenu = ref(false)
 
 async function handleSave() {
   saveStatus.value = 'saving'
@@ -154,15 +155,29 @@ const methodColors: Record<string, string> = {
         Save
       </button>
 
-      <!-- cURL Button -->
-      <button
-        v-if="store.activeRequest.url"
-        class="h-9 rounded-button border border-border px-3 text-sm font-medium transition-all hover:bg-bg-stripe active:scale-[0.97]"
-        :class="curlStatus === 'copied' ? 'text-success border-success' : 'text-text-secondary'"
-        @click="copyAsCurl"
-      >
-        {{ curlStatus === 'copied' ? 'Copied!' : 'cURL' }}
-      </button>
+      <!-- More Menu (cURL 等次要功能) -->
+      <div class="relative">
+        <button
+          class="flex h-9 w-9 items-center justify-center rounded-button border border-border text-sm text-text-secondary transition-all hover:bg-bg-stripe active:scale-[0.97]"
+          title="More actions"
+          @click="showMoreMenu = !showMoreMenu"
+        >
+          ⋯
+        </button>
+        <div
+          v-if="showMoreMenu"
+          class="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-bg-card py-1 shadow-lg"
+        >
+          <button
+            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+            :class="curlStatus === 'copied' ? 'text-success' : ''"
+            @click="copyAsCurl(); showMoreMenu = false"
+          >
+            <span class="text-sm">📋</span>
+            {{ curlStatus === 'copied' ? 'Copied!' : 'Copy as cURL' }}
+          </button>
+        </div>
+      </div>
 
       <!-- Send Button -->
       <button

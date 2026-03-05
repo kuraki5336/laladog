@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import Sidebar from './Sidebar.vue'
 import MainPanel from './MainPanel.vue'
 import StatusBar from './StatusBar.vue'
+import HamburgerMenu from './HamburgerMenu.vue'
+import AboutDialog from './AboutDialog.vue'
+import SponsorDialog from './SponsorDialog.vue'
 import EnvSelector from '@/components/environment/EnvSelector.vue'
 import EnvEditor from '@/components/environment/EnvEditor.vue'
 import WorkspaceSelector from '@/components/workspace/WorkspaceSelector.vue'
@@ -19,6 +22,8 @@ const wsStore = useWorkspaceStore()
 const teamStore = useTeamStore()
 const collectionStore = useCollectionStore()
 const syncStore = useSyncStore()
+const showAboutDialog = ref(false)
+const showSponsorDialog = ref(false)
 
 onMounted(async () => {
   themeStore.init()
@@ -91,6 +96,10 @@ async function syncTeamCollections() {
     <!-- Top Bar -->
     <header class="flex h-12 shrink-0 items-center justify-between border-b border-border bg-bg-card px-4">
       <div class="flex items-center gap-2">
+        <HamburgerMenu
+          @open-about="showAboutDialog = true"
+          @open-sponsor="showSponsorDialog = true"
+        />
         <img src="@/assets/logo/favicon-192.png" alt="LalaDog" class="h-6 w-6" />
         <span class="text-lg font-bold text-primary">LalaDog</span>
         <span class="mx-1 text-border">|</span>
@@ -159,5 +168,9 @@ async function syncTeamCollections() {
 
     <!-- Status Bar -->
     <StatusBar />
+
+    <!-- Dialogs -->
+    <AboutDialog v-if="showAboutDialog" @close="showAboutDialog = false" />
+    <SponsorDialog v-if="showSponsorDialog" @close="showSponsorDialog = false" />
   </div>
 </template>
