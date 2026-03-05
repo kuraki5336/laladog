@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.4',
+    date: '2026-03-05',
+    changes: [
+      '修正自動更新下載失敗問題（Vue Proxy 與 ES6 private fields 衝突）',
+    ],
+  },
+  {
     version: 'v0.3.3',
     date: '2026-03-05',
     changes: [

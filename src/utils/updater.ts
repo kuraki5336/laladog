@@ -1,5 +1,6 @@
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
+import { markRaw, toRaw } from 'vue'
 
 export interface UpdateInfo {
   available: boolean
@@ -24,6 +25,9 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
     const update = await check()
 
     if (update) {
+      // markRaw 防止 Vue 用 Proxy 包裹 Update 物件
+      // （Update class 使用 ES6 private fields，Proxy 無法存取）
+      markRaw(update)
       return {
         available: true,
         version: update.version,
@@ -52,7 +56,9 @@ export async function downloadAndInstall(
   let downloaded = 0
   let total: number | undefined
 
-  await update.downloadAndInstall((event) => {
+  // toRaw 確保取得原始 Update 物件（而非 Vue Proxy）
+  const rawUpdate = toRaw(update)
+  await rawUpdate.downloadAndInstall((event) => {
     switch (event.event) {
       case 'Started':
         total = event.data.contentLength ?? undefined
