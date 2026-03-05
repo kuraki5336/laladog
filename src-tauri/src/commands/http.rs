@@ -10,7 +10,6 @@ pub struct HttpRequestPayload {
     pub url: String,
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
-    pub body_type: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

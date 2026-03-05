@@ -39,3 +39,20 @@
 2. 用戶確認後 → 先產出 SA 文件
 3. 若該功能涉及後端 API → 再產出 SD 文件
 4. 文件產出後一併 commit
+
+## 推版 Tag 規則（強制）
+
+推版前**必須先在本地完成編譯驗證**，確認無錯誤後才能推送 tag。此為強制規則，不可跳過。
+
+### 流程
+1. 更新版本號（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三個檔案同步）
+2. 更新 `src/constants/changelog.ts` 新增版本條目
+3. **本地執行 `npm run tauri build`**，確認編譯成功、零錯誤
+4. Commit 所有變更
+5. 打 tag（格式：`v{版本號}`，如 `v0.3.2`）
+6. Push commit + tag（`git push && git push --tags`）
+
+### 注意事項
+- **絕對不可以跳過步驟 3**（本地編譯驗證），避免 CI 建置失敗浪費時間
+- 若本地 build 失敗，修正問題後重新走流程
+- Tag 推送後會觸發 GitHub Actions release workflow（四平台自動建置 + 簽名）

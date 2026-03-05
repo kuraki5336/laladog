@@ -168,14 +168,14 @@ export const useRequestStore = defineStore('request', () => {
   /** 透過 Tauri Command 發送 */
   async function sendViaTauri(
     method: string, url: string, headers: Record<string, string>,
-    body: string | null, bodyType: string,
+    body: string | null, _bodyType: string,
   ) {
     const { invoke } = await import('@tauri-apps/api/core')
     const result = await invoke<{
       status: number; status_text: string; headers: Record<string, string>
       body: string; duration: number; size: number; body_encoding?: string
     }>('send_http_request', {
-      payload: { method, url, headers, body, body_type: bodyType },
+      payload: { method, url, headers, body },
     })
     return {
       status: result.status,
