@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.2',
+    date: '2026-03-05',
+    changes: [
+      '環境變數隨 Workspace 切換',
+      'Collection 匯出（Postman / LalaDog 格式）',
+      'Bearer Token / Body 預設 JSON / 變數語法高亮修正',
+      'HTTP Response 計時與大小計算修正（與 Postman 一致）',
+    ],
+  },
+  {
     version: 'v0.3.0',
     date: '2026-03-05',
     changes: [
