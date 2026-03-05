@@ -9,6 +9,45 @@ import { useTabStore } from '@/stores/tabStore'
 const mode = ref<'http' | 'websocket'>('http')
 const tabStore = useTabStore()
 
+/* ── Resizable split ── */
+const containerRef = ref<HTMLElement | null>(null)
+const requestRatio = ref(50)
+const isDragging = ref(false)
+let startY = 0
+let startRatio = 0
+
+function onDragStart(e: MouseEvent) {
+  if (!containerRef.value) return
+  isDragging.value = true
+  startY = e.clientY
+  startRatio = requestRatio.value
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+  window.addEventListener('mousemove', onDragMove)
+  window.addEventListener('mouseup', onDragEnd)
+}
+
+function onDragMove(e: MouseEvent) {
+  if (!containerRef.value) return
+  const containerHeight = containerRef.value.clientHeight
+  const delta = e.clientY - startY
+  const deltaPercent = (delta / containerHeight) * 100
+  requestRatio.value = Math.min(85, Math.max(15, startRatio + deltaPercent))
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  window.removeEventListener('mousemove', onDragMove)
+  window.removeEventListener('mouseup', onDragEnd)
+}
+
+function resetRatio() {
+  requestRatio.value = 50
+}
+
+/* ── Keyboard shortcuts ── */
 function handleKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 't') {
     e.preventDefault()
@@ -31,7 +70,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="flex flex-1 flex-col overflow-hidden">
+  <main ref="containerRef" class="flex flex-1 flex-col overflow-hidden">
     <!-- Mode Toggle -->
     <div class="flex shrink-0 items-center gap-1 border-b border-border bg-bg-card px-3 py-1.5">
       <button
@@ -55,12 +94,25 @@ onUnmounted(() => {
 
     <template v-if="mode === 'http'">
       <!-- Request Area -->
-      <div class="flex flex-1 flex-col overflow-hidden border-b border-border">
+      <div :style="{ flex: requestRatio }" class="flex flex-col overflow-hidden">
         <RequestPanel />
       </div>
 
+      <!-- Drag Handle -->
+      <div
+        class="group flex h-1 shrink-0 cursor-row-resize items-center justify-center border-y border-border transition-colors hover:bg-secondary-10"
+        :class="{ 'bg-secondary-10': isDragging }"
+        @mousedown.prevent="onDragStart"
+        @dblclick="resetRatio"
+      >
+        <div
+          class="h-0.5 w-8 rounded-full bg-border transition-colors group-hover:bg-secondary"
+          :class="{ '!bg-secondary': isDragging }"
+        />
+      </div>
+
       <!-- Response Area -->
-      <div class="flex flex-1 flex-col overflow-hidden">
+      <div :style="{ flex: 100 - requestRatio }" class="flex flex-col overflow-hidden">
         <ResponsePanel />
       </div>
     </template>

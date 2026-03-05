@@ -7,23 +7,23 @@ const activeTab = ref<'collections' | 'history'>('collections')
 </script>
 
 <template>
-  <aside class="flex w-72 shrink-0 flex-col border-r border-border bg-bg-sidebar">
+  <aside class="flex shrink-0 flex-col bg-bg-sidebar">
     <!-- Sidebar Tabs -->
     <div class="flex border-b border-border">
       <button
-        class="flex-1 px-3 py-2 text-sm font-medium transition-colors"
+        class="flex-1 border-b-2 px-3 py-[7px] text-sm font-medium transition-colors"
         :class="activeTab === 'collections'
-          ? 'border-b-2 border-secondary text-secondary'
-          : 'text-text-muted hover:text-text-primary'"
+          ? 'border-secondary text-secondary'
+          : 'border-transparent text-text-muted hover:text-text-primary'"
         @click="activeTab = 'collections'"
       >
         Collections
       </button>
       <button
-        class="flex-1 px-3 py-2 text-sm font-medium transition-colors"
+        class="flex-1 border-b-2 px-3 py-[7px] text-sm font-medium transition-colors"
         :class="activeTab === 'history'
-          ? 'border-b-2 border-secondary text-secondary'
-          : 'text-text-muted hover:text-text-primary'"
+          ? 'border-secondary text-secondary'
+          : 'border-transparent text-text-muted hover:text-text-primary'"
         @click="activeTab = 'history'"
       >
         History

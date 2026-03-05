@@ -30,6 +30,35 @@ const showAboutDialog = ref(false)
 const showSponsorDialog = ref(false)
 const showUpdateDialog = ref(false)
 const showUserMenu = ref(false)
+
+/* ── Sidebar resizable ── */
+const sidebarWidth = ref(288)
+const isSidebarDragging = ref(false)
+let sidebarStartX = 0
+let sidebarStartWidth = 0
+
+function onSidebarDragStart(e: MouseEvent) {
+  isSidebarDragging.value = true
+  sidebarStartX = e.clientX
+  sidebarStartWidth = sidebarWidth.value
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  window.addEventListener('mousemove', onSidebarDragMove)
+  window.addEventListener('mouseup', onSidebarDragEnd)
+}
+
+function onSidebarDragMove(e: MouseEvent) {
+  const delta = e.clientX - sidebarStartX
+  sidebarWidth.value = Math.min(480, Math.max(180, sidebarStartWidth + delta))
+}
+
+function onSidebarDragEnd() {
+  isSidebarDragging.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  window.removeEventListener('mousemove', onSidebarDragMove)
+  window.removeEventListener('mouseup', onSidebarDragEnd)
+}
 // 使用 shallowRef 避免 Vue Proxy 包裹 Update 物件
 // （Update class 使用 ES6 private fields，Proxy 無法存取）
 const updateInfo = shallowRef<UpdateInfo | null>(null)
@@ -230,7 +259,20 @@ async function manualCheckUpdate() {
 
     <!-- Main Content -->
     <div class="flex flex-1 overflow-hidden">
-      <Sidebar />
+      <Sidebar :style="{ width: sidebarWidth + 'px' }" />
+
+      <!-- Sidebar Drag Handle -->
+      <div
+        class="group flex w-1 shrink-0 cursor-col-resize items-center justify-center border-x border-border transition-colors hover:bg-secondary-10"
+        :class="{ 'bg-secondary-10': isSidebarDragging }"
+        @mousedown.prevent="onSidebarDragStart"
+      >
+        <div
+          class="h-8 w-0.5 rounded-full bg-border transition-colors group-hover:bg-secondary"
+          :class="{ '!bg-secondary': isSidebarDragging }"
+        />
+      </div>
+
       <MainPanel />
     </div>
 

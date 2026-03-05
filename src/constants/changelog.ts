@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.6',
+    date: '2026-03-06',
+    changes: [
+      'Request / Response 區域可拖曳調整高度（雙擊重置）',
+      '側邊欄寬度可拖曳調整（左右拉動分隔線）',
+      '對齊側邊欄與主面板標籤列高度',
+    ],
+  },
+  {
     version: 'v0.3.5',
     date: '2026-03-05',
     changes: [
