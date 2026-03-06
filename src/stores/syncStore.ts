@@ -40,6 +40,7 @@ export const useSyncStore = defineStore('sync', () => {
 
     const wsBase = toWsUrl(API_BASE)
     const url = `${wsBase}/ws/sync/${teamId}?token=${authStore.token}`
+    console.log(`[WS] Connecting to: ${wsBase}/ws/sync/${teamId}?token=***`)
 
     try {
       ws = new WebSocket(url)
@@ -62,7 +63,7 @@ export const useSyncStore = defineStore('sync', () => {
     }
 
     ws.onclose = (event) => {
-      console.log(`[WS] Disconnected (code=${event.code}, reason=${event.reason})`)
+      console.log(`[WS] Disconnected (code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean})`)
       status.value = 'disconnected'
       stopHeartbeat()
       ws = null
@@ -75,6 +76,8 @@ export const useSyncStore = defineStore('sync', () => {
 
     ws.onerror = (event) => {
       console.error('[WS] Error:', event)
+      // 嘗試印出更多資訊
+      console.error('[WS] ReadyState:', ws?.readyState, 'URL:', url.replace(/token=.*/, 'token=***'))
     }
   }
 
@@ -152,6 +155,11 @@ export const useSyncStore = defineStore('sync', () => {
 
         case 'error':
           console.warn('[WS] Server error:', msg.message)
+          // Token 過期或無效 → 停止重連，避免無限循環
+          if (msg.message?.includes('token')) {
+            console.error('[WS] Token invalid, stopping reconnect')
+            intentionalClose = true
+          }
           break
 
         default:

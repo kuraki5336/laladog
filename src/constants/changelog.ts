@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.9',
+    date: '2026-03-06',
+    changes: [
+      '修正自動更新無法覆蓋舊版問題（移除 MSI，統一使用 NSIS 安裝包）',
+      '修正 WebSocket 連線驗證失敗回傳 HTTP 403 問題（改為正確的 WS close code）',
+      'WebSocket Token 過期時自動停止重連（避免無限循環）',
+      '同步與 WebSocket 連線新增除錯日誌',
+    ],
+  },
+  {
     version: 'v0.3.8',
     date: '2026-03-06',
     changes: [

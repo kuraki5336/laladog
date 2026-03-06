@@ -53,9 +53,11 @@ async def websocket_sync(websocket: WebSocket, team_id: str, token: str = Query(
 
     連線方式：ws://host/ws/sync/{team_id}?token=JWT_TOKEN
     """
-    # 1. 驗證 JWT
+    # 1. 驗證 JWT（必須先 accept 才能送 close code，否則 Starlette 只回 HTTP 403）
     user = await verify_ws_token(token)
     if not user:
+        await websocket.accept()
+        await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired token"}))
         await websocket.close(code=4001, reason="Invalid token")
         return
 
@@ -66,6 +68,8 @@ async def websocket_sync(websocket: WebSocket, team_id: str, token: str = Query(
     async with async_session() as db:
         is_member = await verify_team_member(user_id, team_id, db)
         if not is_member:
+            await websocket.accept()
+            await websocket.send_text(json.dumps({"type": "error", "message": "Not a team member"}))
             await websocket.close(code=4003, reason="Not a team member")
             return
 

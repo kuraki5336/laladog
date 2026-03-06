@@ -375,13 +375,16 @@ export const useCollectionStore = defineStore('collection', () => {
 
     isSyncing.value = true
     try {
+      console.log(`[Sync] pullFromCloud: teamId=${teamId}, workspaceId=${workspaceId}`)
       const resp = await apiCall('GET', `/sync/${teamId}/collections`)
+      console.log(`[Sync] pullFromCloud response: status=${resp.status}, bodyLength=${resp.body?.length}`)
       if (resp.status >= 400) {
         console.error('[Sync] Failed to pull from cloud:', resp.body)
         return
       }
 
       const collections: SharedCollectionResp[] = JSON.parse(resp.body)
+      console.log(`[Sync] pullFromCloud: ${collections.length} collection(s) found`)
       if (collections.length === 0) {
         console.log('[Sync] No shared collections on cloud')
         return
