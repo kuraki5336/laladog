@@ -66,8 +66,9 @@ async function handleShareWorkspace() {
   const team = await teamStore.createTeam(activeWs.value.name)
   if (team) {
     await wsStore.linkTeam(activeWs.value.id, team.id)
-    // 分享後立即將本地 collections 推送到雲端
+    // 分享後立即將本地 collections 推送到雲端，成功後刪除本地副本（雲端為唯一來源）
     await collectionStore.pushToCloud()
+    await collectionStore.clearLocalCollections(activeWs.value.id)
     inviteMsg.value = 'Workspace shared & synced! Now invite members.'
   } else {
     shareError.value = teamStore.error || 'Failed to share workspace'

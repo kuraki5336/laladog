@@ -162,9 +162,9 @@ export const useSyncStore = defineStore('sync', () => {
 
         case 'error':
           console.warn('[WS] Server error:', msg.message)
-          // Token 過期或無效 → 停止重連，避免無限循環
-          if (msg.message?.includes('token')) {
-            console.error('[WS] Token invalid, stopping reconnect')
+          // Token 過期、無效或非團隊成員 → 停止重連，避免無限循環
+          if (msg.message?.includes('token') || msg.message?.includes('team member')) {
+            console.error('[WS] Auth/permission error, stopping reconnect')
             intentionalClose = true
           }
           break

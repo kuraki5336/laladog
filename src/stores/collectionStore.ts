@@ -537,6 +537,17 @@ export const useCollectionStore = defineStore('collection', () => {
       }))
   }
 
+  /** 清除指定 workspace 的本地 SQLite collection_nodes（推上雲端後使用） */
+  async function clearLocalCollections(workspaceId: string) {
+    if (!isTauri) return
+    const db = await getDb()
+    await db.execute(
+      'DELETE FROM collection_nodes WHERE workspace_id = ?',
+      [workspaceId],
+    )
+    console.log(`[Sync] Cleared local collections for workspace ${workspaceId}`)
+  }
+
   return {
     nodes,
     selectedNodeId,
@@ -554,6 +565,7 @@ export const useCollectionStore = defineStore('collection', () => {
     pullFromCloud,
     applyRemoteUpdate,
     serializeWorkspaceCollections,
+    clearLocalCollections,
     getCollectionTree,
     getAllCollectionTrees,
   }
