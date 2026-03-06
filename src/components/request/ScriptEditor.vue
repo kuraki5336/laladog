@@ -23,7 +23,16 @@ async function runScript() {
 
   try {
     const requestStore = useRequestStore()
-    const result = requestStore.executeScript(script.value || '', props.response)
+    const req = requestStore.activeRequest
+    const reqCtx = req ? {
+      method: req.method,
+      url: req.url,
+      headers: Object.fromEntries(
+        (req.headers || []).filter((h: any) => h.enabled && h.key).map((h: any) => [h.key, h.value]),
+      ),
+      body: req.body?.raw || null,
+    } : undefined
+    const result = requestStore.executeScript(script.value || '', props.response, reqCtx)
     output.value = result || 'Script executed successfully (no output)'
   } catch (e: any) {
     output.value = `Error: ${e.message}`
