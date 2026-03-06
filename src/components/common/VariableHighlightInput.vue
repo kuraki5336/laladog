@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
+import VariablePopover from './VariablePopover.vue'
 
 const model = defineModel<string>({ default: '' })
 
@@ -23,27 +24,32 @@ const inputRef = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 const scrollLeft = ref(0)
 const scrollTop = ref(0)
 
+// Popover state
+const hoveredVar = ref<string | null>(null)
+const popoverAnchorRect = ref<{ top: number; left: number; bottom: number; right: number } | null>(null)
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+
 const hasVars = computed(() => (model.value || '').includes('{{'))
 
 const segments = computed(() => {
   const text = model.value || ''
   if (!text || !hasVars.value) return []
 
-  const result: { text: string; isVar: boolean }[] = []
-  const regex = /(\{\{.*?\}\})/g
+  const result: { text: string; isVar: boolean; varName: string }[] = []
+  const regex = /(\{\{([\w.:-]*)\}\})/g
   let lastIndex = 0
   let match
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      result.push({ text: text.slice(lastIndex, match.index), isVar: false })
+      result.push({ text: text.slice(lastIndex, match.index), isVar: false, varName: '' })
     }
-    result.push({ text: match[1], isVar: true })
+    result.push({ text: match[1], isVar: true, varName: match[2] })
     lastIndex = regex.lastIndex
   }
 
   if (lastIndex < text.length) {
-    result.push({ text: text.slice(lastIndex), isVar: false })
+    result.push({ text: text.slice(lastIndex), isVar: false, varName: '' })
   }
 
   return result
@@ -55,6 +61,60 @@ function syncScroll() {
     scrollTop.value = inputRef.value.scrollTop
   }
 }
+
+function scheduleClose() {
+  closeTimer = setTimeout(() => {
+    hoveredVar.value = null
+    popoverAnchorRect.value = null
+  }, 200)
+}
+
+function cancelClose() {
+  if (closeTimer) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
+}
+
+function onVarMouseEnter(e: MouseEvent, varName: string) {
+  cancelClose()
+  const target = e.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  hoveredVar.value = varName
+  popoverAnchorRect.value = {
+    top: rect.top,
+    left: rect.left,
+    bottom: rect.bottom,
+    right: rect.right,
+  }
+}
+
+function onVarMouseLeave() {
+  scheduleClose()
+}
+
+function onPopoverMouseEnter() {
+  cancelClose()
+}
+
+function onPopoverMouseLeave() {
+  scheduleClose()
+}
+
+function onPopoverClose() {
+  cancelClose()
+  hoveredVar.value = null
+  popoverAnchorRect.value = null
+}
+
+function onVarClick() {
+  // Forward focus to the input when clicking on variable overlay
+  inputRef.value?.focus()
+}
+
+onBeforeUnmount(() => {
+  if (closeTimer) clearTimeout(closeTimer)
+})
 
 defineExpose({ focus: () => inputRef.value?.focus() })
 </script>
@@ -94,10 +154,23 @@ defineExpose({ focus: () => inputRef.value?.focus() })
         <span
           v-for="(seg, idx) in segments"
           :key="idx"
-          :class="seg.isVar ? 'var-highlight' : 'var-plain'"
+          :class="seg.isVar ? 'var-highlight var-highlight--interactive' : 'var-plain'"
+          @mouseenter="seg.isVar ? onVarMouseEnter($event, seg.varName) : undefined"
+          @mouseleave="seg.isVar ? onVarMouseLeave() : undefined"
+          @click="seg.isVar ? onVarClick() : undefined"
         >{{ seg.text }}</span>
       </div>
     </div>
+
+    <!-- Variable Popover -->
+    <VariablePopover
+      v-if="hoveredVar"
+      :var-name="hoveredVar"
+      :anchor-rect="popoverAnchorRect"
+      @mouseenter="onPopoverMouseEnter"
+      @mouseleave="onPopoverMouseLeave"
+      @close="onPopoverClose"
+    />
   </div>
 </template>
 
@@ -150,6 +223,15 @@ defineExpose({ focus: () => inputRef.value?.focus() })
   color: #e67e22;
   background: rgba(230, 126, 34, 0.12);
   border-radius: 2px;
+}
+
+.var-highlight--interactive {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.var-highlight--interactive:hover {
+  background: rgba(230, 126, 34, 0.25);
 }
 
 .var-plain {

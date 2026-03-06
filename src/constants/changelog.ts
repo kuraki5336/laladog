@@ -6,6 +6,19 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.8',
+    date: '2026-03-06',
+    changes: [
+      '變數 Hover Popover — 滑過 {{variable}} 即時顯示值、可臨時修改或寫回環境',
+      'Body 編輯器支援變數語法高亮與 Popover',
+      'JSON Response 預設全層級展開、長文字自動換行',
+      '未儲存分頁關閉前二次確認（Ctrl+W / 點擊關閉）',
+      'Ctrl+S 快捷鍵儲存 Request',
+      '自動偵測分頁變更狀態（dirty tracking）',
+      '移除 Response Body 樹狀/文字切換按鈕',
+    ],
+  },
+  {
     version: 'v0.3.7',
     date: '2026-03-06',
     changes: [

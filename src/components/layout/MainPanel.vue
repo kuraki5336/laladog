@@ -1,13 +1,29 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import TabBar from './TabBar.vue'
 import RequestPanel from '@/components/request/RequestPanel.vue'
 import ResponsePanel from '@/components/response/ResponsePanel.vue'
 import WebSocketPanel from '@/components/request/WebSocketPanel.vue'
 import { useTabStore } from '@/stores/tabStore'
+import { useRequestStore } from '@/stores/requestStore'
 
 const mode = ref<'http' | 'websocket'>('http')
 const tabStore = useTabStore()
+const requestStore = useRequestStore()
+
+/* ── Auto dirty tracking ── */
+const pendingCloseTabId = ref<string | null>(null)
+
+watch(
+  () => {
+    const tab = tabStore.activeTab
+    if (!tab) return null
+    return JSON.stringify([tab.request.method, tab.request.url, tab.request.params, tab.request.headers, tab.request.body, tab.request.auth, tab.request.preRequestScript, tab.request.testScript])
+  },
+  () => {
+    if (tabStore.activeTabId) tabStore.updateDirty(tabStore.activeTabId)
+  },
+)
 
 /* ── Resizable split ── */
 const containerRef = ref<HTMLElement | null>(null)
@@ -55,7 +71,24 @@ function handleKeydown(e: KeyboardEvent) {
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
     e.preventDefault()
-    if (tabStore.activeTabId) tabStore.closeTab(tabStore.activeTabId)
+    if (!tabStore.activeTabId) return
+    const tab = tabStore.tabs.find(t => t.id === tabStore.activeTabId)
+    if (tab?.isDirty) {
+      pendingCloseTabId.value = tabStore.activeTabId
+    } else {
+      tabStore.closeTab(tabStore.activeTabId)
+    }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    requestStore.saveToCollection()
+  }
+}
+
+function confirmClose() {
+  if (pendingCloseTabId.value) {
+    tabStore.closeTab(pendingCloseTabId.value)
+    pendingCloseTabId.value = null
   }
 }
 
@@ -121,5 +154,17 @@ onUnmounted(() => {
     <template v-else>
       <WebSocketPanel />
     </template>
+
+    <!-- Close unsaved tab confirm (Ctrl+W) -->
+    <Teleport to="body">
+      <div v-if="pendingCloseTabId" class="fixed inset-0 z-40 bg-black/30" @click="pendingCloseTabId = null" />
+      <div v-if="pendingCloseTabId" class="fixed left-1/2 top-1/2 z-50 w-80 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-bg-card p-5 shadow-lg">
+        <p class="mb-4 text-sm text-text-primary">This tab has unsaved changes. Close anyway?</p>
+        <div class="flex justify-end gap-2">
+          <button class="rounded px-3 py-1.5 text-sm text-text-muted hover:bg-bg-hover" @click="pendingCloseTabId = null">Cancel</button>
+          <button class="rounded bg-danger px-3 py-1.5 text-sm text-white hover:bg-danger/90" @click="confirmClose">Close</button>
+        </div>
+      </div>
+    </Teleport>
   </main>
 </template>

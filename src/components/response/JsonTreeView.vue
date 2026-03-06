@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<{
   defaultExpanded: true,
 })
 
-const isExpanded = ref(props.defaultExpanded && props.depth < 3)
+const isExpanded = ref(props.defaultExpanded)
 
 const isObject = computed(() => props.data !== null && typeof props.data === 'object' && !Array.isArray(props.data))
 const isArray = computed(() => Array.isArray(props.data))
@@ -100,11 +100,6 @@ defineExpose({ expandAll, collapseAll })
         <!-- Expanded open bracket -->
         <template v-else>
           <span class="json-bracket">{{ bracketOpen }}</span>
-          <!-- Expand/Collapse all (only at root) -->
-          <span v-if="depth === 0" class="json-actions">
-            <button class="json-action-btn" @click="expandAll" title="Expand All">⊞</button>
-            <button class="json-action-btn" @click="collapseAll" title="Collapse All">⊟</button>
-          </span>
         </template>
       </div>
 
@@ -115,11 +110,12 @@ defineExpose({ expandAll, collapseAll })
             :data="value"
             :depth="depth + 1"
             :key-name="isObject ? key : `${key}`"
-            :default-expanded="expandAllChildren > collapseAllChildren"
+            :default-expanded="true"
           />
           <span v-if="idx < entries.length - 1" class="json-comma">,</span>
         </div>
-        <div class="json-line" :style="{ paddingLeft: '0px' }">
+        <div class="json-line">
+          <span class="json-toggle-spacer" />
           <span class="json-bracket">{{ bracketClose }}</span>
         </div>
       </template>
@@ -146,7 +142,8 @@ defineExpose({ expandAll, collapseAll })
 .json-line {
   display: flex;
   align-items: flex-start;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .json-child {
@@ -230,23 +227,4 @@ defineExpose({ expandAll, collapseAll })
   font-style: italic;
 }
 
-.json-actions {
-  margin-left: 8px;
-  display: inline-flex;
-  gap: 2px;
-}
-
-.json-action-btn {
-  font-size: 12px;
-  padding: 0 3px;
-  border-radius: 2px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  line-height: 1;
-}
-
-.json-action-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
-}
 </style>

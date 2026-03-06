@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRequestStore } from '@/stores/requestStore'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
+import VariableHighlightInput from '@/components/common/VariableHighlightInput.vue'
 
 const store = useRequestStore()
 const formatError = ref<string | null>(null)
@@ -71,9 +72,11 @@ const rawTypes = ['json', 'xml', 'text'] as const
         </button>
         <span v-if="formatError" class="text-xs text-danger">{{ formatError }}</span>
       </div>
-      <textarea
+      <VariableHighlightInput
         v-model="store.activeRequest.body.raw"
-        class="h-48 w-full rounded-button border border-border p-3 font-mono text-xs outline-none transition-colors focus:border-border-focus"
+        multiline
+        :rows="10"
+        input-class="h-48 w-full rounded-button border border-border p-3 font-mono text-xs outline-none transition-colors focus:border-border-focus"
         placeholder='{ "key": "value" }'
       />
     </div>

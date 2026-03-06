@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import type { Environment, EnvVariable } from '@/types'
 import { useWorkspaceStore } from './workspaceStore'
 
@@ -8,6 +8,8 @@ const isTauri = !!(window as any).__TAURI_INTERNALS__
 export const useEnvironmentStore = defineStore('environment', () => {
   const environments = ref<Environment[]>([])
   const globalVariables = ref<EnvVariable[]>([])
+  /** 本地臨時覆蓋值（不寫回 DB / 不同步雲端） */
+  const localOverrides = reactive<Record<string, string>>({})
 
   /** 依當前 workspace 的 activeEnvironmentId 取得啟用環境 */
   const activeEnvironment = computed(() => {
@@ -17,8 +19,8 @@ export const useEnvironmentStore = defineStore('environment', () => {
     return environments.value.find((e) => e.id === activeEnvId) || null
   })
 
-  /** 合併全域 + 環境變數（環境變數優先） */
-  const allVariables = computed(() => {
+  /** 合併全域 + 環境變數 + 本地覆蓋（本地覆蓋最優先） */
+  const sharedVariables = computed(() => {
     const vars: Record<string, string> = {}
     for (const v of globalVariables.value) {
       if (v.enabled) vars[v.key] = v.value
@@ -30,6 +32,59 @@ export const useEnvironmentStore = defineStore('environment', () => {
     }
     return vars
   })
+
+  const allVariables = computed(() => {
+    return { ...sharedVariables.value, ...localOverrides }
+  })
+
+  /** 取得變數的共享值（不含本地覆蓋） */
+  function getSharedValue(key: string): string | undefined {
+    return sharedVariables.value[key]
+  }
+
+  /** 設定本地臨時覆蓋 */
+  function setLocalOverride(key: string, value: string) {
+    localOverrides[key] = value
+  }
+
+  /** 清除本地覆蓋，恢復共享值 */
+  function clearLocalOverride(key: string) {
+    delete localOverrides[key]
+  }
+
+  /** 將本地覆蓋值寫回環境變數 store */
+  async function updateSharedValue(key: string, value: string) {
+    // 優先更新環境變數
+    if (activeEnvironment.value) {
+      const envVar = activeEnvironment.value.variables.find((v) => v.key === key && v.enabled)
+      if (envVar) {
+        await updateVariable(envVar.id, key, value, true)
+        delete localOverrides[key]
+        return
+      }
+    }
+    // 其次更新全域變數
+    const globalVar = globalVariables.value.find((v) => v.key === key && v.enabled)
+    if (globalVar) {
+      if (isTauri) {
+        const db = await getDb()
+        await db.execute('UPDATE global_variables SET value = ? WHERE id = ?', [value, globalVar.id])
+      }
+      globalVar.value = value
+      delete localOverrides[key]
+    }
+  }
+
+  /** 取得變數來源資訊 */
+  function getVariableSource(key: string): { source: 'environment' | 'global' | 'unknown'; envName?: string } {
+    if (activeEnvironment.value) {
+      const envVar = activeEnvironment.value.variables.find((v) => v.key === key && v.enabled)
+      if (envVar) return { source: 'environment', envName: activeEnvironment.value.name }
+    }
+    const globalVar = globalVariables.value.find((v) => v.key === key && v.enabled)
+    if (globalVar) return { source: 'global' }
+    return { source: 'unknown' }
+  }
 
   async function getDb() {
     const Database = (await import('@tauri-apps/plugin-sql')).default
@@ -169,7 +224,9 @@ export const useEnvironmentStore = defineStore('environment', () => {
   return {
     environments,
     globalVariables,
+    localOverrides,
     activeEnvironment,
+    sharedVariables,
     allVariables,
     loadAll,
     addEnvironment,
@@ -179,5 +236,10 @@ export const useEnvironmentStore = defineStore('environment', () => {
     updateVariable,
     deleteEnvironment,
     importEnvironment,
+    getSharedValue,
+    setLocalOverride,
+    clearLocalOverride,
+    updateSharedValue,
+    getVariableSource,
   }
 })

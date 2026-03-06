@@ -295,16 +295,6 @@ async function saveToFile() {
       </button>
 
       <div class="ml-auto flex items-center gap-1">
-        <!-- Tree view toggle (only in pretty mode with JSON) -->
-        <button
-          v-if="isJson && viewMode === 'pretty' && !isBinary"
-          class="rounded-sm px-2 py-1 text-xs transition-colors"
-          :class="useTreeView ? 'bg-primary-10 text-primary' : 'text-text-muted hover:text-text-primary'"
-          :title="useTreeView ? 'Switch to text view' : 'Switch to tree view'"
-          @click="useTreeView = !useTreeView"
-        >
-          {{ useTreeView ? '🌳' : '📄' }}
-        </button>
         <!-- Search toggle -->
         <button
           v-if="!isBinary"
