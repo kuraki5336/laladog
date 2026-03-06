@@ -163,7 +163,7 @@ function openContextMenuFromButton(e: MouseEvent) {
     <div
       :data-node-id="node.id"
       :data-node-type="node.type"
-      class="group relative flex items-center gap-1 rounded-sm px-1 py-1.5 text-xs transition-colors select-none"
+      class="group relative flex items-center gap-1 rounded-sm px-1 py-2 text-xs transition-colors select-none"
       :class="[
         store.selectedNodeId === node.id ? 'bg-secondary-10' : 'hover:bg-bg-hover',
         isDragSource ? 'opacity-40' : '',

@@ -100,14 +100,15 @@ onUnmounted(() => {
 
       <!-- Drag Handle -->
       <div
-        class="group flex h-1 shrink-0 cursor-row-resize items-center justify-center border-y border-border transition-colors hover:bg-secondary-10"
+        class="group relative flex h-2 shrink-0 cursor-row-resize items-center justify-center transition-colors"
         :class="{ 'bg-secondary-10': isDragging }"
         @mousedown.prevent="onDragStart"
         @dblclick="resetRatio"
       >
+        <div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border transition-colors group-hover:bg-secondary/40" :class="{ '!bg-secondary/40': isDragging }" />
         <div
-          class="h-0.5 w-8 rounded-full bg-border transition-colors group-hover:bg-secondary"
-          :class="{ '!bg-secondary': isDragging }"
+          class="relative z-10 flex w-6 h-1 items-center justify-center rounded-full bg-border transition-all group-hover:bg-secondary group-hover:h-1.5"
+          :class="{ '!bg-secondary !h-1.5': isDragging }"
         />
       </div>
 

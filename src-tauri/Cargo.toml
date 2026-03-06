@@ -1,6 +1,6 @@
 [package]
 name = "laladog"
-version = "0.3.6"
+version = "0.3.7"
 description = "LalaDog - API Client for Teams"
 authors = ["you"]
 edition = "2021"

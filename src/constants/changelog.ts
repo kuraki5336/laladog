@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.7',
+    date: '2026-03-06',
+    changes: [
+      '側邊欄清單項目間距微調（增加上下 2px）',
+      '面板分隔線改為膠囊把手樣式（更易辨識與拖動）',
+    ],
+  },
+  {
     version: 'v0.3.6',
     date: '2026-03-06',
     changes: [

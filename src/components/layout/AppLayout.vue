@@ -263,13 +263,14 @@ async function manualCheckUpdate() {
 
       <!-- Sidebar Drag Handle -->
       <div
-        class="group flex w-1 shrink-0 cursor-col-resize items-center justify-center border-x border-border transition-colors hover:bg-secondary-10"
+        class="group relative flex w-2 shrink-0 cursor-col-resize items-center justify-center transition-colors"
         :class="{ 'bg-secondary-10': isSidebarDragging }"
         @mousedown.prevent="onSidebarDragStart"
       >
+        <div class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border transition-colors group-hover:bg-secondary/40" :class="{ '!bg-secondary/40': isSidebarDragging }" />
         <div
-          class="h-8 w-0.5 rounded-full bg-border transition-colors group-hover:bg-secondary"
-          :class="{ '!bg-secondary': isSidebarDragging }"
+          class="relative z-10 flex h-6 w-1 items-center justify-center rounded-full bg-border transition-all group-hover:bg-secondary group-hover:w-1.5"
+          :class="{ '!bg-secondary !w-1.5': isSidebarDragging }"
         />
       </div>
 
