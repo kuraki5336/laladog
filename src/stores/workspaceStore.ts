@@ -168,6 +168,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
     }
 
+    // 清除不屬於任何 team 的 cloud workspace（team 已刪除或被移出）
+    const validTeamIds = new Set(teams.map(t => t.id))
+    const orphaned = workspaces.value.filter(w => w.teamId && !validTeamIds.has(w.teamId))
+    for (const ws of orphaned) {
+      if (isTauri) {
+        const db = await getDb()
+        await db.execute('DELETE FROM workspaces WHERE id = ?', [ws.id])
+      }
+      const idx = workspaces.value.findIndex(w => w.id === ws.id)
+      if (idx >= 0) workspaces.value.splice(idx, 1)
+      console.log(`[Workspace] Removed orphaned team workspace: ${ws.name} (teamId=${ws.teamId})`)
+    }
+
+    // 如果刪掉的是 active workspace，自動切換到第一個
+    if (workspaces.value.length > 0 && !workspaces.value.some(w => w.isActive)) {
+      await setActive(workspaces.value[0].id)
+    }
+
     return mapping
   }
 
