@@ -10,6 +10,7 @@ import { useHistoryStore } from './historyStore'
 import { useConsoleStore } from './consoleStore'
 import { useTabStore } from './tabStore'
 import { resolveVariables } from '@/utils/variableResolver'
+import CryptoJS from 'crypto-js'
 
 /** 偵測是否在 Tauri 環境中 */
 const isTauri = !!(window as any).__TAURI_INTERNALS__
@@ -90,7 +91,11 @@ export const useRequestStore = defineStore('request', () => {
   })
 
   /** 執行 script（pre-request 或 tests） */
-  function executeScript(scriptCode: string, responseData?: HttpResponse | null): string {
+  function executeScript(
+    scriptCode: string,
+    responseData?: HttpResponse | null,
+    requestContext?: { method?: string; url?: string; headers?: Record<string, string>; body?: string | null },
+  ): string {
     const logs: string[] = []
     const envStore = useEnvironmentStore()
 
@@ -100,27 +105,56 @@ export const useRequestStore = defineStore('request', () => {
       warn: (...args: any[]) => logs.push(`[WARN] ${args.map(String).join(' ')}`),
     }
 
-    const pm = {
+    // collectionVariables / globals 共用的 set/get helper
+    const varHelper = {
+      set: (k: string, v: string) => {
+        const activeEnv = envStore.activeEnvironment
+        if (!activeEnv) {
+          logs.push(`[ENV] ⚠ No active environment, cannot set "${k}"`)
+          return
+        }
+        const existing = activeEnv.variables.find((ev: any) => ev.key === k)
+        if (existing) {
+          envStore.updateVariable(existing.id, k, String(v), true)
+        } else {
+          envStore.addVariable(activeEnv.id, k, String(v))
+        }
+      },
+      get: (k: string) => envStore.allVariables[k] || '',
+      unset: (k: string) => {
+        const activeEnv = envStore.activeEnvironment
+        if (!activeEnv) return
+        const existing = activeEnv.variables.find((ev: any) => ev.key === k)
+        if (existing) {
+          envStore.updateVariable(existing.id, k, '', false)
+        }
+      },
+    }
+
+    const pm: any = {
       environment: {
-        set: (k: string, v: string) => {
-          const activeEnv = envStore.activeEnvironment
-          if (!activeEnv) {
-            logs.push(`[ENV] ⚠ No active environment, cannot set "${k}"`)
-            return
-          }
-          const existing = activeEnv.variables.find((ev: any) => ev.key === k)
-          if (existing) {
-            envStore.updateVariable(existing.id, k, String(v), true)
-            logs.push(`[ENV] ✓ Updated ${k}`)
-          } else {
-            envStore.addVariable(activeEnv.id, k, String(v))
-            logs.push(`[ENV] ✓ Created ${k}`)
-          }
-        },
-        get: (k: string) => envStore.allVariables[k] || '',
+        set: (k: string, v: string) => { varHelper.set(k, v); logs.push(`[ENV] ✓ ${k}`) },
+        get: (k: string) => varHelper.get(k),
       },
       variables: {
-        get: (k: string) => envStore.allVariables[k] || '',
+        get: (k: string) => varHelper.get(k),
+        set: (k: string, v: string) => varHelper.set(k, v),
+      },
+      collectionVariables: {
+        get: (k: string) => varHelper.get(k),
+        set: (k: string, v: string) => varHelper.set(k, v),
+        unset: (k: string) => varHelper.unset(k),
+      },
+      globals: {
+        get: (k: string) => varHelper.get(k),
+        set: (k: string, v: string) => varHelper.set(k, v),
+        unset: (k: string) => varHelper.unset(k),
+      },
+      request: {
+        method: requestContext?.method || '',
+        url: requestContext?.url || '',
+        headers: requestContext?.headers || {},
+        body: requestContext?.body || '',
       },
       response: {
         status: responseData?.status ?? 0,
@@ -156,8 +190,8 @@ export const useRequestStore = defineStore('request', () => {
     }
 
     try {
-      const fn = new Function('console', 'pm', scriptCode)
-      fn(mockConsole, pm)
+      const fn = new Function('console', 'pm', 'CryptoJS', scriptCode)
+      fn(mockConsole, pm, CryptoJS)
     } catch (e: any) {
       logs.push(`[ERROR] ${e.message}`)
     }
@@ -233,7 +267,15 @@ export const useRequestStore = defineStore('request', () => {
     try {
       // Pre-request Script
       if (tab.request.preRequestScript) {
-        const preOutput = executeScript(tab.request.preRequestScript)
+        const reqCtx = {
+          method: tab.request.method,
+          url: tab.request.url,
+          headers: Object.fromEntries(
+            (tab.request.headers || []).filter((h: any) => h.enabled && h.key).map((h: any) => [h.key, h.value]),
+          ),
+          body: tab.request.body?.raw || null,
+        }
+        const preOutput = executeScript(tab.request.preRequestScript, null, reqCtx)
         tab.scriptOutput = preOutput
       }
 
