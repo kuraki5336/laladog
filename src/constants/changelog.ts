@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.11',
+    date: '2026-03-07',
+    changes: [
+      'Pre-request Script 新增 pm.request（body / url / method / headers）',
+      'Pre-request Script 新增 pm.collectionVariables / pm.globals（get / set / unset）',
+      'Pre-request Script 新增 CryptoJS 支援（HmacSHA256、Base64 等）',
+    ],
+  },
+  {
     version: 'v0.3.10',
     date: '2026-03-06',
     changes: [
