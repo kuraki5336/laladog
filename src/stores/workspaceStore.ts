@@ -168,22 +168,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
     }
 
-    // 清除不屬於任何 team 的 cloud workspace（team 已刪除或被移出）
+    // 清除孤兒 teamId（本地 workspace 被錯誤標上不存在的 teamId → 回歸純本地）
     const validTeamIds = new Set(teams.map(t => t.id))
-    const orphaned = workspaces.value.filter(w => w.teamId && !validTeamIds.has(w.teamId))
-    for (const ws of orphaned) {
-      if (isTauri) {
-        const db = await getDb()
-        await db.execute('DELETE FROM workspaces WHERE id = ?', [ws.id])
+    for (const ws of workspaces.value) {
+      if (ws.teamId && !validTeamIds.has(ws.teamId)) {
+        if (isTauri) {
+          const db = await getDb()
+          await db.execute(
+            'UPDATE workspaces SET team_id = NULL, updated_at = datetime("now") WHERE id = ?',
+            [ws.id],
+          )
+        }
+        console.log(`[Workspace] Cleared stale teamId from "${ws.name}" (was ${ws.teamId})`)
+        ws.teamId = null
       }
-      const idx = workspaces.value.findIndex(w => w.id === ws.id)
-      if (idx >= 0) workspaces.value.splice(idx, 1)
-      console.log(`[Workspace] Removed orphaned team workspace: ${ws.name} (teamId=${ws.teamId})`)
-    }
-
-    // 如果刪掉的是 active workspace，自動切換到第一個
-    if (workspaces.value.length > 0 && !workspaces.value.some(w => w.isActive)) {
-      await setActive(workspaces.value[0].id)
     }
 
     return mapping

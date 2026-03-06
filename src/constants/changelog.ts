@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.3.10',
+    date: '2026-03-06',
+    changes: [
+      '修正 WebSocket 多重連線競爭條件（Race Condition）',
+      '非團隊成員（4003）自動停止 WS 重連，避免無限循環',
+      '分享 Workspace 後自動清除本地 SQLite 副本（避免雲端/地端重複）',
+      '啟動時自動清除孤兒 teamId（不存在的 team → 回歸純本地 Workspace）',
+    ],
+  },
+  {
     version: 'v0.3.9',
     date: '2026-03-06',
     changes: [

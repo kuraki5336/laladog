@@ -120,10 +120,11 @@ watch(
 async function syncTeamCollections() {
   try {
     await teamStore.loadTeams()
-    if (teamStore.teams.length === 0) return
 
-    // 確保每個 team 在本地都有 workspace
+    // 確保每個 team 在本地都有 workspace（同時清除孤兒 cloud workspace）
     const mapping = await wsStore.ensureTeamWorkspaces(teamStore.teams)
+
+    if (mapping.size === 0) return
 
     // 對每個 team workspace 拉取雲端 collections
     for (const [teamId, wsId] of mapping) {
