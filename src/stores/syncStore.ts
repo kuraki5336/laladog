@@ -28,8 +28,8 @@ export const useSyncStore = defineStore('sync', () => {
     const authStore = useAuthStore()
     if (!authStore.token || !teamId) return
 
-    // 如果已連線到同一個 team，不重連
-    if (ws && currentTeamId.value === teamId && status.value === 'connected') return
+    // 如果已連線或正在連線同一個 team，不重連
+    if (ws && currentTeamId.value === teamId && (status.value === 'connected' || status.value === 'connecting')) return
 
     // 先斷開舊連線
     disconnect()
@@ -42,8 +42,10 @@ export const useSyncStore = defineStore('sync', () => {
     const url = `${wsBase}/ws/sync/${teamId}?token=${authStore.token}`
     console.log(`[WS] Connecting to: ${wsBase}/ws/sync/${teamId}?token=***`)
 
+    let currentWs: WebSocket
     try {
-      ws = new WebSocket(url)
+      currentWs = new WebSocket(url)
+      ws = currentWs
     } catch (e) {
       console.error('[WS] Failed to create WebSocket:', e)
       status.value = 'disconnected'
@@ -51,19 +53,24 @@ export const useSyncStore = defineStore('sync', () => {
       return
     }
 
-    ws.onopen = () => {
+    currentWs.onopen = () => {
+      // 若已被新連線取代，忽略舊的 onopen
+      if (ws !== currentWs) return
       console.log(`[WS] Connected to team ${teamId}`)
       status.value = 'connected'
       reconnectDelay = 1000 // 重設 backoff
       startHeartbeat()
     }
 
-    ws.onmessage = (event) => {
+    currentWs.onmessage = (event) => {
+      if (ws !== currentWs) return
       handleMessage(event.data)
     }
 
-    ws.onclose = (event) => {
+    currentWs.onclose = (event) => {
       console.log(`[WS] Disconnected (code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean})`)
+      // 若已被新連線取代，忽略舊連線的 onclose（避免 race condition）
+      if (ws !== currentWs) return
       status.value = 'disconnected'
       stopHeartbeat()
       ws = null
@@ -74,10 +81,10 @@ export const useSyncStore = defineStore('sync', () => {
       }
     }
 
-    ws.onerror = (event) => {
+    currentWs.onerror = (event) => {
+      if (ws !== currentWs) return
       console.error('[WS] Error:', event)
-      // 嘗試印出更多資訊
-      console.error('[WS] ReadyState:', ws?.readyState, 'URL:', url.replace(/token=.*/, 'token=***'))
+      console.error('[WS] ReadyState:', currentWs.readyState, 'URL:', url.replace(/token=.*/, 'token=***'))
     }
   }
 

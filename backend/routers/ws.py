@@ -56,6 +56,7 @@ async def websocket_sync(websocket: WebSocket, team_id: str, token: str = Query(
     # 1. 驗證 JWT（必須先 accept 才能送 close code，否則 Starlette 只回 HTTP 403）
     user = await verify_ws_token(token)
     if not user:
+        print(f"[WS] Token verification FAILED for team {team_id}")
         await websocket.accept()
         await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired token"}))
         await websocket.close(code=4001, reason="Invalid token")
@@ -63,10 +64,12 @@ async def websocket_sync(websocket: WebSocket, team_id: str, token: str = Query(
 
     user_id = user["sub"]
     user_name = user.get("name", "Unknown")
+    print(f"[WS] Token OK: user={user_name} (id={user_id}), team={team_id}")
 
     # 2. 驗證團隊成員資格
     async with async_session() as db:
         is_member = await verify_team_member(user_id, team_id, db)
+        print(f"[WS] Team member check: user={user_id}, team={team_id}, is_member={is_member}")
         if not is_member:
             await websocket.accept()
             await websocket.send_text(json.dumps({"type": "error", "message": "Not a team member"}))
