@@ -6,6 +6,22 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.0',
+    date: '2026-03-07',
+    changes: [
+      'pm.sendRequest() — Script 內發送額外 HTTP 請求（async/await + callback 雙模式）',
+      'Chai 風格斷言鏈 — .to.equal/.eql/.have.property/.be.an/.not 等完整支援',
+      '動態變數 — {{$guid}} / {{$timestamp}} / {{$randomInt}} 等 20+ 種',
+      'pm.request.body 結構化 — .mode / .raw / .urlencoded / .formdata',
+      'atob() / btoa() Base64 編解碼',
+      'pm.response.code（status 別名）',
+      'Lodash (_) 工具庫內建',
+      'xml2Json() XML 轉 JSON',
+      'Monaco Editor 取代 textarea — 語法高亮 + pm.* 自動補全',
+      'Script API Reference 面板 — ? 按鈕展開語法大全，可點擊插入範例',
+    ],
+  },
+  {
     version: 'v0.3.11',
     date: '2026-03-07',
     changes: [
