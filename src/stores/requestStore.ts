@@ -10,10 +10,25 @@ import { useHistoryStore } from './historyStore'
 import { useConsoleStore } from './consoleStore'
 import { useTabStore } from './tabStore'
 import { resolveVariables } from '@/utils/variableResolver'
+import { sendHttp } from '@/utils/httpSender'
+import { createExpect } from '@/utils/scriptAssertions'
 import CryptoJS from 'crypto-js'
+import * as _ from 'lodash-es'
+import { XMLParser } from 'fast-xml-parser'
 
-/** 偵測是否在 Tauri 環境中 */
 const isTauri = !!(window as any).__TAURI_INTERNALS__
+
+/** Script 執行時的 request context */
+interface ScriptRequestContext {
+  method?: string
+  url?: string
+  headers?: Record<string, string>
+  body?: string | null
+  bodyType?: string
+  bodyRawType?: string
+  formData?: Array<{ key: string; value: string }>
+  urlencoded?: Array<{ key: string; value: string }>
+}
 
 export const useRequestStore = defineStore('request', () => {
   // tabStore 在函式內呼叫（Pinia 支援延遲取用）
@@ -90,12 +105,41 @@ export const useRequestStore = defineStore('request', () => {
     },
   })
 
-  /** 執行 script（pre-request 或 tests） */
-  function executeScript(
+  /** 正規化 header 輸入（支援 Postman 的 [{key,value}] 陣列格式） */
+  function normalizeHeaders(headerInput: any): Record<string, string> {
+    if (!headerInput) return {}
+    if (Array.isArray(headerInput)) {
+      const result: Record<string, string> = {}
+      for (const h of headerInput) {
+        if (h.key) result[h.key] = h.value || ''
+      }
+      return result
+    }
+    return headerInput
+  }
+
+  /** 建構結構化 body 物件（Postman 相容） */
+  function buildStructuredBody(ctx?: ScriptRequestContext) {
+    if (!ctx) return { mode: 'raw' as const, raw: '', urlencoded: [] as any[], formdata: [] as any[], toString: () => '' }
+    const mode = ctx.bodyType === 'x-www-form-urlencoded' ? 'urlencoded' as const
+               : ctx.bodyType === 'form-data' ? 'formdata' as const
+               : 'raw' as const
+    const raw = ctx.body || ''
+    return {
+      mode,
+      raw,
+      urlencoded: ctx.urlencoded || [],
+      formdata: ctx.formData || [],
+      toString: () => raw,
+    }
+  }
+
+  /** 執行 script（pre-request 或 tests），支援 async（pm.sendRequest） */
+  async function executeScript(
     scriptCode: string,
     responseData?: HttpResponse | null,
-    requestContext?: { method?: string; url?: string; headers?: Record<string, string>; body?: string | null },
-  ): string {
+    requestContext?: ScriptRequestContext,
+  ): Promise<string> {
     const logs: string[] = []
     const envStore = useEnvironmentStore()
 
@@ -154,10 +198,11 @@ export const useRequestStore = defineStore('request', () => {
         method: requestContext?.method || '',
         url: requestContext?.url || '',
         headers: requestContext?.headers || {},
-        body: requestContext?.body || '',
+        body: buildStructuredBody(requestContext),
       },
       response: {
         status: responseData?.status ?? 0,
+        code: responseData?.status ?? 0,
         statusText: responseData?.statusText ?? '',
         headers: responseData?.headers ?? {},
         body: responseData?.body ?? '',
@@ -167,85 +212,75 @@ export const useRequestStore = defineStore('request', () => {
         },
       },
       test: (name: string, fn: Function) => {
-        try { fn(); logs.push(`✓ ${name}`) }
-        catch (e: any) { logs.push(`✗ ${name}: ${e.message}`) }
+        try {
+          const result = fn()
+          // 支援 async test callback
+          if (result && typeof result.then === 'function') {
+            return result.then(() => logs.push(`✓ ${name}`)).catch((e: any) => logs.push(`✗ ${name}: ${e.message}`))
+          }
+          logs.push(`✓ ${name}`)
+        } catch (e: any) {
+          logs.push(`✗ ${name}: ${e.message}`)
+        }
       },
-      expect: (val: any) => ({
-        to: {
-          equal: (expected: any) => {
-            if (val !== expected) throw new Error(`Expected ${expected}, got ${val}`)
-          },
-          not: { equal: (expected: any) => { if (val === expected) throw new Error(`Expected not ${expected}`) } },
-          be: {
-            true: () => { if (!val) throw new Error('Expected true') },
-            false: () => { if (val) throw new Error('Expected false') },
-            above: (n: number) => { if (val <= n) throw new Error(`Expected > ${n}, got ${val}`) },
-            below: (n: number) => { if (val >= n) throw new Error(`Expected < ${n}, got ${val}`) },
-          },
-          include: (str: string) => {
-            if (typeof val === 'string' && !val.includes(str)) throw new Error(`Expected to include "${str}"`)
-          },
-        },
-      }),
+      expect: createExpect,
+      sendRequest: (requestOrUrl: string | object, callback?: Function) => {
+        let opts: { method: string; url: string; headers: Record<string, string>; body: string | null }
+        if (typeof requestOrUrl === 'string') {
+          opts = { method: 'GET', url: requestOrUrl, headers: {}, body: null }
+        } else {
+          const req = requestOrUrl as any
+          opts = {
+            method: (req.method || 'GET').toUpperCase(),
+            url: req.url,
+            headers: normalizeHeaders(req.header || req.headers),
+            body: typeof req.body === 'object' ? (req.body?.raw || JSON.stringify(req.body)) : (req.body || null),
+          }
+        }
+
+        logs.push(`[HTTP] → ${opts.method} ${opts.url}`)
+
+        const promise = sendHttp(opts).then(result => {
+          const responseObj = {
+            status: result.status,
+            code: result.status,
+            statusText: result.statusText,
+            headers: result.headers,
+            body: result.body,
+            json: () => {
+              try { return JSON.parse(result.body) }
+              catch { throw new Error('Response body is not valid JSON') }
+            },
+          }
+          logs.push(`[HTTP] ← ${result.status} ${result.statusText} (${result.duration}ms)`)
+          if (callback) callback(null, responseObj)
+          return responseObj
+        }).catch(err => {
+          logs.push(`[HTTP] ✗ ${err.message}`)
+          if (callback) callback(err)
+          throw err
+        })
+
+        return promise
+      },
     }
 
     try {
-      const fn = new Function('console', 'pm', 'CryptoJS', scriptCode)
-      fn(mockConsole, pm, CryptoJS)
+      const xmlParser = new XMLParser({ ignoreAttributes: false })
+      const xml2Json = (xml: string) => xmlParser.parse(xml)
+
+      const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
+      const fn = new AsyncFunction('console', 'pm', 'CryptoJS', 'atob', 'btoa', '_', 'xml2Json', scriptCode)
+      const SCRIPT_TIMEOUT = 30_000
+      await Promise.race([
+        fn(mockConsole, pm, CryptoJS, atob, btoa, _, xml2Json),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Script timeout (30s)')), SCRIPT_TIMEOUT)),
+      ])
     } catch (e: any) {
       logs.push(`[ERROR] ${e.message}`)
     }
 
     return logs.join('\n')
-  }
-
-  /** 透過 Tauri Command 發送 */
-  async function sendViaTauri(
-    method: string, url: string, headers: Record<string, string>,
-    body: string | null, _bodyType: string,
-  ) {
-    const { invoke } = await import('@tauri-apps/api/core')
-    const result = await invoke<{
-      status: number; status_text: string; headers: Record<string, string>
-      body: string; duration: number; size: number; body_encoding?: string
-    }>('send_http_request', {
-      payload: { method, url, headers, body },
-    })
-    return {
-      status: result.status,
-      statusText: result.status_text,
-      headers: result.headers,
-      body: result.body,
-      duration: result.duration,
-      size: result.size,
-      bodyEncoding: (result.body_encoding || 'text') as 'text' | 'base64',
-    }
-  }
-
-  /** 瀏覽器 fallback（開發用，受 CORS 限制） */
-  async function sendViaFetch(
-    method: string, url: string, headers: Record<string, string>,
-    body: string | null,
-  ) {
-    const start = performance.now()
-    const fetchOptions: RequestInit = { method, headers }
-    if (body && !['GET', 'HEAD'].includes(method)) {
-      fetchOptions.body = body
-    }
-    const resp = await fetch(url, fetchOptions)
-    const duration = Math.round(performance.now() - start)
-    const respBody = await resp.text()
-    const respHeaders: Record<string, string> = {}
-    resp.headers.forEach((v, k) => { respHeaders[k] = v })
-    return {
-      status: resp.status,
-      statusText: resp.statusText,
-      headers: respHeaders,
-      body: respBody,
-      duration,
-      size: new Blob([respBody]).size,
-      bodyEncoding: 'text' as const,
-    }
   }
 
   /** 發送 HTTP 請求（寫入特定 tab，避免切 tab 後寫錯） */
@@ -267,15 +302,19 @@ export const useRequestStore = defineStore('request', () => {
     try {
       // Pre-request Script
       if (tab.request.preRequestScript) {
-        const reqCtx = {
+        const reqCtx: ScriptRequestContext = {
           method: tab.request.method,
           url: tab.request.url,
           headers: Object.fromEntries(
             (tab.request.headers || []).filter((h: any) => h.enabled && h.key).map((h: any) => [h.key, h.value]),
           ),
           body: tab.request.body?.raw || null,
+          bodyType: tab.request.body?.type || 'none',
+          bodyRawType: tab.request.body?.rawType,
+          formData: (tab.request.body?.formData || []).filter((i: any) => i.enabled).map((i: any) => ({ key: i.key, value: i.value })),
+          urlencoded: (tab.request.body?.urlencoded || []).filter((i: any) => i.enabled).map((i: any) => ({ key: i.key, value: i.value })),
         }
-        const preOutput = executeScript(tab.request.preRequestScript, null, reqCtx)
+        const preOutput = await executeScript(tab.request.preRequestScript, null, reqCtx)
         tab.scriptOutput = preOutput
       }
 
@@ -356,10 +395,12 @@ export const useRequestStore = defineStore('request', () => {
         body: resolvedBody,
       }
 
-      // Tauri 環境用 invoke，瀏覽器用 fetch fallback
-      const result = isTauri
-        ? await sendViaTauri(tab.request.method, resolvedUrl, resolvedHeaders, resolvedBody, tab.request.body.type)
-        : await sendViaFetch(tab.request.method, resolvedUrl, resolvedHeaders, resolvedBody)
+      const result = await sendHttp({
+        method: tab.request.method,
+        url: resolvedUrl,
+        headers: resolvedHeaders,
+        body: resolvedBody,
+      })
 
       tab.response = {
         status: result.status,
@@ -373,7 +414,7 @@ export const useRequestStore = defineStore('request', () => {
 
       // Tests Script
       if (tab.request.testScript) {
-        const testOutput = executeScript(tab.request.testScript, tab.response)
+        const testOutput = await executeScript(tab.request.testScript, tab.response)
         tab.scriptOutput = tab.scriptOutput
           ? tab.scriptOutput + '\n--- Tests ---\n' + testOutput
           : testOutput
