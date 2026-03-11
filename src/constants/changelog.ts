@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.1',
+    date: '2026-03-11',
+    changes: [
+      '修正 HTTP Redirect 時 Authorization header 被移除導致 401 的問題',
+      'Redirect 行為與 Postman 一致 — http→https 跨 port 重導向保留完整 headers',
+    ],
+  },
+  {
     version: 'v0.4.0',
     date: '2026-03-07',
     changes: [

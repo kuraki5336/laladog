@@ -1,5 +1,6 @@
 use base64::Engine;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -47,8 +48,17 @@ fn is_binary_content_type(content_type: &str) -> bool {
 
 #[tauri::command]
 pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpResponsePayload, String> {
+    // 自訂 redirect policy：follow redirect 時保留所有 headers（含 Authorization）
+    // 與 Postman 行為一致 — http→https redirect 不會丟失 auth token
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
+        .redirect(Policy::custom(|attempt| {
+            if attempt.previous().len() > 10 {
+                attempt.error("too many redirects")
+            } else {
+                attempt.follow()
+            }
+        }))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
