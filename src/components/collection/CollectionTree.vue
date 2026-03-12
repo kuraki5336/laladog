@@ -162,31 +162,39 @@ function triggerImport() {
 
 async function handleImportFile(e: Event) {
   importError.value = null
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
+  const files = (e.target as HTMLInputElement).files
+  if (!files || files.length === 0) return
 
-  try {
-    const text = await file.text()
-    let data: any
+  const errors: string[] = []
 
-    // 嘗試 JSON 解析，失敗則嘗試 YAML
+  for (const file of Array.from(files)) {
     try {
-      data = JSON.parse(text)
-    } catch {
-      const yaml = await import('js-yaml')
-      data = yaml.load(text)
-    }
+      const text = await file.text()
+      let data: any
 
-    // 自動判斷格式：OpenAPI/Swagger 或 Postman
-    let nodes
-    if (isOpenAPISpec(data)) {
-      nodes = parseOpenAPISpec(data)
-    } else {
-      nodes = parsePostmanCollection(data)
+      // 嘗試 JSON 解析，失敗則嘗試 YAML
+      try {
+        data = JSON.parse(text)
+      } catch {
+        const yaml = await import('js-yaml')
+        data = yaml.load(text)
+      }
+
+      // 自動判斷格式：OpenAPI/Swagger 或 Postman
+      let nodes
+      if (isOpenAPISpec(data)) {
+        nodes = parseOpenAPISpec(data)
+      } else {
+        nodes = parsePostmanCollection(data)
+      }
+      await store.importNodes(nodes)
+    } catch (err: any) {
+      errors.push(`${file.name}: ${err.message || 'Failed to import'}`)
     }
-    await store.importNodes(nodes)
-  } catch (err: any) {
-    importError.value = err.message || 'Failed to import'
+  }
+
+  if (errors.length > 0) {
+    importError.value = errors.join('\n')
   }
 
   // reset input so same file can be re-imported
@@ -260,6 +268,7 @@ async function handleExportAll() {
       ref="fileInput"
       type="file"
       accept=".json,.yaml,.yml"
+      multiple
       class="hidden"
       @change="handleImportFile"
     />

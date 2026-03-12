@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.7',
+    date: '2026-03-12',
+    changes: [
+      '支援批次匯入多個 Collection 檔案 — 可一次選取多個 JSON/YAML 檔案匯入',
+    ],
+  },
+  {
     version: 'v0.4.6',
     date: '2026-03-12',
     changes: [
