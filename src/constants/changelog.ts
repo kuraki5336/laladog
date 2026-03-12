@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.8',
+    date: '2026-03-12',
+    changes: [
+      '修復雲端 workspace 環境變數匯入失敗的問題（外鍵約束衝突）',
+    ],
+  },
+  {
     version: 'v0.4.7',
     date: '2026-03-12',
     changes: [
