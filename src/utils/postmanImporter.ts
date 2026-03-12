@@ -5,21 +5,24 @@ import type { CollectionNode, SavedRequest, KeyValuePair, HttpMethod } from '@/t
  * 回傳扁平化的 CollectionNode 陣列
  */
 export function parsePostmanCollection(json: any): CollectionNode[] {
+  // 支援 Postman Export from API 格式（外層多包一層 "collection"）
+  const data = json.collection || json
+
   const nodes: CollectionNode[] = []
   const collectionId = crypto.randomUUID()
 
   // 頂層 Collection
   nodes.push({
     id: collectionId,
-    name: json.info?.name || 'Imported Collection',
+    name: data.info?.name || 'Imported Collection',
     type: 'collection',
     parentId: null,
     sortOrder: 0,
   })
 
   // 遞迴解析 items
-  if (json.item) {
-    parseItems(json.item, collectionId, nodes)
+  if (data.item) {
+    parseItems(data.item, collectionId, nodes)
   }
 
   return nodes

@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.4',
+    date: '2026-03-12',
+    changes: [
+      '支援 Postman Export from API 格式匯入（外層多包 collection wrapper 的 JSON）',
+    ],
+  },
+  {
     version: 'v0.4.3',
     date: '2026-03-12',
     changes: [
