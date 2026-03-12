@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -148,9 +148,9 @@ async def invite_member(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Only admin can invite members")
 
-    # 查找受邀者（透過 email 找 user）
+    # 查找受邀者（透過 email 找 user，忽略大小寫）
     from backend.models.user import User
-    result = await db.execute(select(User).where(User.email == body.email))
+    result = await db.execute(select(User).where(func.lower(User.email) == body.email.lower()))
     invitee = result.scalar_one_or_none()
 
     if invitee:
@@ -172,7 +172,7 @@ async def invite_member(
         result = await db.execute(
             select(PendingInvitation).where(
                 PendingInvitation.team_id == team_id,
-                PendingInvitation.email == body.email,
+                func.lower(PendingInvitation.email) == body.email.lower(),
             )
         )
         if result.scalar_one_or_none():
@@ -180,7 +180,7 @@ async def invite_member(
 
         invitation = PendingInvitation(
             team_id=team_id,
-            email=body.email,
+            email=body.email.lower(),
             role=body.role,
             invited_by=user_id,
         )

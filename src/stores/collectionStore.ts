@@ -7,6 +7,16 @@ import { apiCall } from '@/utils/api'
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__
 
+/** 指定 workspace 是否為雲端（有 teamId）→ 不寫本地 SQLite */
+function isCloudWs(workspaceId?: string | null): boolean {
+  const wsStore = useWorkspaceStore()
+  if (workspaceId) {
+    const ws = wsStore.workspaces.find(w => w.id === workspaceId)
+    return !!ws?.teamId
+  }
+  return !!wsStore.activeWorkspace?.teamId
+}
+
 /** 雲端 SharedCollection 回傳格式 */
 interface SharedCollectionResp {
   id: string
@@ -83,7 +93,7 @@ export const useCollectionStore = defineStore('collection', () => {
     const wsStore = useWorkspaceStore()
     const workspaceId = type === 'collection' ? (wsStore.activeWorkspace?.id || null) : null
 
-    if (isTauri) {
+    if (isTauri && !isCloudWs()) {
       const db = await getDb()
       await db.execute(
         'INSERT INTO collection_nodes (id, name, node_type, parent_id, sort_order, request_data, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -110,7 +120,7 @@ export const useCollectionStore = defineStore('collection', () => {
 
   /** 重命名節點 */
   async function renameNode(id: string, name: string) {
-    if (isTauri) {
+    if (isTauri && !isCloudWs()) {
       const db = await getDb()
       await db.execute('UPDATE collection_nodes SET name = ?, updated_at = datetime("now") WHERE id = ?', [name, id])
     }
@@ -121,7 +131,7 @@ export const useCollectionStore = defineStore('collection', () => {
 
   /** 刪除節點（含子節點） */
   async function deleteNode(id: string) {
-    if (isTauri) {
+    if (isTauri && !isCloudWs()) {
       const db = await getDb()
       // SQLite ON DELETE CASCADE 會處理子節點
       await db.execute('DELETE FROM collection_nodes WHERE id = ?', [id])
@@ -139,7 +149,7 @@ export const useCollectionStore = defineStore('collection', () => {
 
   /** 更新請求資料 */
   async function updateRequest(id: string, request: SavedRequest) {
-    if (isTauri) {
+    if (isTauri && !isCloudWs()) {
       const db = await getDb()
       await db.execute(
         'UPDATE collection_nodes SET request_data = ?, updated_at = datetime("now") WHERE id = ?',
@@ -226,8 +236,8 @@ export const useCollectionStore = defineStore('collection', () => {
       n.sortOrder = i
     })
 
-    // 持久化到 SQLite
-    if (isTauri) {
+    // 持久化到 SQLite（雲端 workspace 跳過）
+    if (isTauri && !isCloudWs()) {
       const db = await getDb()
       for (const n of siblings) {
         await db.execute(
@@ -246,7 +256,8 @@ export const useCollectionStore = defineStore('collection', () => {
     const wsStore = useWorkspaceStore()
     const activeWsId = wsStore.activeWorkspace?.id || null
 
-    if (isTauri) {
+    // 雲端 workspace 不寫 SQLite（workspace_id 不在 workspaces 表中，FK 會失敗）
+    if (isTauri && !isCloudWs()) {
       const db = await getDb()
       for (const n of newNodes) {
         const wsId = n.type === 'collection' ? activeWsId : null
@@ -394,20 +405,16 @@ export const useCollectionStore = defineStore('collection', () => {
       const cloudNodes: CollectionNode[] = JSON.parse(collections[0].data)
       if (!Array.isArray(cloudNodes) || cloudNodes.length === 0) return
 
-      // 清除本地此 workspace 的所有 collection nodes
-      if (isTauri) {
+      // 雲端 workspace 不寫 SQLite（workspace_id 不在 workspaces 表中）
+      if (isTauri && !isCloudWs(workspaceId)) {
         const db = await getDb()
-        // 先找出此 workspace 下的所有頂層 collection ids
         const topRows = await db.select<any[]>(
           'SELECT id FROM collection_nodes WHERE workspace_id = ? AND parent_id IS NULL',
           [workspaceId],
         )
         for (const row of topRows) {
-          // CASCADE 會刪除子節點
           await db.execute('DELETE FROM collection_nodes WHERE id = ?', [row.id])
         }
-
-        // 匯入雲端節點
         for (const n of cloudNodes) {
           await db.execute(
             'INSERT INTO collection_nodes (id, name, node_type, parent_id, sort_order, request_data, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -462,8 +469,8 @@ export const useCollectionStore = defineStore('collection', () => {
       const cloudNodes: CollectionNode[] = JSON.parse(dataJson)
       if (!Array.isArray(cloudNodes) || cloudNodes.length === 0) return
 
-      // 清除本地此 workspace 的所有 collection nodes
-      if (isTauri) {
+      // 雲端 workspace 不寫 SQLite
+      if (isTauri && !isCloudWs(workspaceId)) {
         const db = await getDb()
         const topRows = await db.select<any[]>(
           'SELECT id FROM collection_nodes WHERE workspace_id = ? AND parent_id IS NULL',

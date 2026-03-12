@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.6',
+    date: '2026-03-12',
+    changes: [
+      '修正雲端 workspace 匯入 Postman Collection 失敗的問題 — 雲端 workspace 的 collection 操作不再寫入本地 SQLite',
+      '修正後端邀請成員 Email 大小寫敏感問題 — SQL 查詢改用 func.lower() 比對',
+    ],
+  },
+  {
     version: 'v0.4.5',
     date: '2026-03-12',
     changes: [
