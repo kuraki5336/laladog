@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.5',
+    date: '2026-03-12',
+    changes: [
+      '修正 Workspace 下拉選單顯示重複雲端項目的問題',
+      '雲端 team workspace 改為純記憶體管理 — 不再寫入本地 SQLite',
+      '登入後從 API 建立雲端 workspace，登出即消失',
+      '啟動時自動清理殘留在 DB 中的雲端 workspace 資料',
+    ],
+  },
+  {
     version: 'v0.4.4',
     date: '2026-03-12',
     changes: [
