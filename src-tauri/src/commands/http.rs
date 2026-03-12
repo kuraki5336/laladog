@@ -48,17 +48,12 @@ fn is_binary_content_type(content_type: &str) -> bool {
 
 #[tauri::command]
 pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpResponsePayload, String> {
-    // 自訂 redirect policy：follow redirect 時保留所有 headers（含 Authorization）
-    // 與 Postman 行為一致 — http→https redirect 不會丟失 auth token
+    // 停用自動 redirect — 改為手動 follow，確保 Authorization header 不被移除
+    // reqwest 預設在跨 origin redirect 時會移除 sensitive headers，
+    // 手動 follow 可完整保留所有 headers，與 Postman 行為一致
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
-        .redirect(Policy::custom(|attempt| {
-            if attempt.previous().len() > 10 {
-                attempt.error("too many redirects")
-            } else {
-                attempt.follow()
-            }
-        }))
+        .redirect(Policy::none())
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -72,26 +67,91 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
         header_map.insert(name, val);
     }
 
-    // Build request
+    // Build method
     let method = payload
         .method
         .parse::<reqwest::Method>()
         .map_err(|e| format!("Invalid HTTP method: {}", e))?;
 
-    let mut request = client.request(method, &payload.url).headers(header_map);
-
-    // Attach body
-    if let Some(body) = &payload.body {
-        request = request.body(body.clone());
-    }
-
     // Send and measure（計時包含完整回應：headers + body 下載）
     let start = Instant::now();
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
 
+    // 手動 follow redirect（最多 10 次），每次都帶上完整 headers
+    let mut current_url = payload.url.clone();
+    let mut current_method = method.clone();
+    let mut current_body = payload.body.clone();
+    let mut response;
+    let max_redirects = 10;
+
+    for i in 0..=max_redirects {
+        let mut req = client
+            .request(current_method.clone(), &current_url)
+            .headers(header_map.clone());
+
+        if let Some(ref body) = current_body {
+            req = req.body(body.clone());
+        }
+
+        response = req
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        let status = response.status();
+
+        // 非 3xx → 不是 redirect，直接回傳結果
+        if !status.is_redirection() {
+            return build_response(response, start).await;
+        }
+
+        // 超過最大 redirect 次數
+        if i == max_redirects {
+            return Err("Too many redirects (max 10)".to_string());
+        }
+
+        // 取得 Location header
+        let location = response
+            .headers()
+            .get("location")
+            .and_then(|v| v.to_str().ok())
+            .ok_or("Redirect response missing Location header")?
+            .to_string();
+
+        // 解析 Location（可能是相對路徑）
+        current_url = if location.starts_with("http://") || location.starts_with("https://") {
+            location
+        } else {
+            // 相對路徑 → 基於目前 URL 解析
+            let base = reqwest::Url::parse(&current_url)
+                .map_err(|e| format!("Invalid base URL: {}", e))?;
+            base.join(&location)
+                .map_err(|e| format!("Invalid redirect URL: {}", e))?
+                .to_string()
+        };
+
+        // 303 See Other → 強制轉為 GET 且不帶 body（HTTP 規範）
+        if status == reqwest::StatusCode::SEE_OTHER {
+            current_method = reqwest::Method::GET;
+            current_body = None;
+        }
+        // 301/302 且原始為 POST → 轉為 GET（符合瀏覽器 / Postman 行為）
+        else if (status == reqwest::StatusCode::MOVED_PERMANENTLY
+            || status == reqwest::StatusCode::FOUND)
+            && current_method == reqwest::Method::POST
+        {
+            current_method = reqwest::Method::GET;
+            current_body = None;
+        }
+    }
+
+    Err("Unexpected redirect loop".to_string())
+}
+
+/// 從 reqwest Response 建構回傳結構
+async fn build_response(
+    response: reqwest::Response,
+    start: Instant,
+) -> Result<HttpResponsePayload, String> {
     let status = response.status().as_u16();
     let status_text = response
         .status()
@@ -104,13 +164,12 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
     let mut header_size: u64 = 0;
     for (key, value) in response.headers() {
         if let Ok(v) = value.to_str() {
-            // 計算 header 在線上的大小（"key: value\r\n"）
             header_size += (key.as_str().len() + 2 + v.len() + 2) as u64;
             resp_headers.insert(key.to_string(), v.to_string());
         }
     }
 
-    // 取得原始傳輸大小（壓縮後），若 server 有回 content-length 就用它
+    // 取得原始傳輸大小
     let content_length: Option<u64> = resp_headers
         .get("content-length")
         .and_then(|v| v.parse().ok());
@@ -122,17 +181,14 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
         .unwrap_or_default();
     let is_binary = is_binary_content_type(&content_type);
 
-    // Read body（reqwest 會自動解壓 gzip/br/deflate）
+    // Read body
     let body_bytes = response
         .bytes()
         .await
         .map_err(|e| format!("Failed to read response body: {}", e))?;
 
-    // 計時到 body 完全讀完才停
     let duration = start.elapsed().as_millis() as u64;
 
-    // 大小：優先使用 content-length（傳輸大小），加上 header 大小
-    // 這與 Postman 的計算方式一致
     let body_transfer_size = content_length.unwrap_or(body_bytes.len() as u64);
     let size = header_size + body_transfer_size;
 

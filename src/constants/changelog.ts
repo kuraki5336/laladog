@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.2',
+    date: '2026-03-12',
+    changes: [
+      '修正 HTTP Redirect 保留 Authorization header — 改為手動 follow redirect，完整保留所有 headers',
+      '支援 .NET http→https 跨 port/scheme 重導向，與 Postman 行為完全一致',
+      '遵循 HTTP 規範：301/302 POST→GET 自動轉換、303 強制 GET',
+    ],
+  },
+  {
     version: 'v0.4.1',
     date: '2026-03-11',
     changes: [
