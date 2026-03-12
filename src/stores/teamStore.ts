@@ -70,7 +70,7 @@ export const useTeamStore = defineStore('team', () => {
   async function inviteMember(teamId: string, email: string, role: string = 'editor'): Promise<boolean> {
     error.value = null
     try {
-      const resp = await apiCall('POST', `/teams/${teamId}/invite`, { email, role })
+      const resp = await apiCall('POST', `/teams/${teamId}/invite`, { email: email.toLowerCase(), role })
       if (resp.status >= 400) {
         const data = JSON.parse(resp.body)
         throw new Error(data.detail || `Invite failed: ${resp.status}`)

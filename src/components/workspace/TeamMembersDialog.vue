@@ -30,7 +30,7 @@ const isAdmin = computed(() => {
   const team = teamStore.teams.find(t => t.id === teamId.value)
   if (team?.role) return team.role === 'admin'
   // fallback: 從已載入的 members 判斷
-  const me = members.value.find(m => m.email === authStore.user?.email)
+  const me = members.value.find(m => m.email?.toLowerCase() === authStore.user?.email?.toLowerCase())
   return me?.role === 'admin'
 })
 

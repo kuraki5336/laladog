@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.4.3',
+    date: '2026-03-12',
+    changes: [
+      '修正邀請成員 Email 大小寫敏感問題 — 送出前統一轉為小寫',
+      '修正成員列表中自身身份比對的大小寫問題',
+    ],
+  },
+  {
     version: 'v0.4.2',
     date: '2026-03-12',
     changes: [
