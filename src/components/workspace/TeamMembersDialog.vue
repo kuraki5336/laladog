@@ -4,6 +4,7 @@ import { useTeamStore } from '@/stores/teamStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useCollectionStore } from '@/stores/collectionStore'
+import { useEnvironmentStore } from '@/stores/environmentStore'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -12,6 +13,7 @@ const teamStore = useTeamStore()
 const wsStore = useWorkspaceStore()
 const authStore = useAuthStore()
 const collectionStore = useCollectionStore()
+const envStore = useEnvironmentStore()
 
 const inviteEmail = ref('')
 const inviteRole = ref('viewer')
@@ -66,9 +68,11 @@ async function handleShareWorkspace() {
   const team = await teamStore.createTeam(activeWs.value.name)
   if (team) {
     await wsStore.linkTeam(activeWs.value.id, team.id)
-    // 分享後立即將本地 collections 推送到雲端，成功後刪除本地副本（雲端為唯一來源）
+    // 分享後立即將本地資料推送到雲端，成功後刪除本地副本（雲端為唯一來源）
     await collectionStore.pushToCloud()
     await collectionStore.clearLocalCollections(activeWs.value.id)
+    await envStore.pushLocalToCloud(team.id)
+    await envStore.clearLocalEnvironments(activeWs.value.id)
     inviteMsg.value = 'Workspace shared & synced! Now invite members.'
   } else {
     shareError.value = teamStore.error || 'Failed to share workspace'

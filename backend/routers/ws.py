@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import async_session
 from backend.core.security import decode_token
 from backend.core.ws_manager import manager
-from backend.models.team import TeamMember, SharedCollection
+from backend.models.team import TeamMember, SharedCollection, SharedEnvironment
 
 router = APIRouter(tags=["websocket"])
 
@@ -105,6 +105,15 @@ async def websocket_sync(websocket: WebSocket, team_id: str, token: str = Query(
                     websocket=websocket,
                 )
 
+            elif msg_type == "environment_update":
+                # Client 推送環境變數更新
+                await handle_environment_update(
+                    team_id=team_id,
+                    user_id=user_id,
+                    data=msg.get("data", "[]"),
+                    websocket=websocket,
+                )
+
             elif msg_type == "ping":
                 # 心跳回應
                 await websocket.send_text(json.dumps({"type": "pong"}))
@@ -171,6 +180,62 @@ async def handle_collection_update(
             "type": "collection_updated",
             "data": data,
             "name": name,
+            "updated_by": user_id,
+            "timestamp": now.isoformat(),
+        },
+        exclude_ws=websocket,
+    )
+
+
+async def handle_environment_update(
+    team_id: str,
+    user_id: str,
+    data: str,
+    websocket: WebSocket,
+):
+    """處理環境變數更新：寫入 DB + 廣播給同 team 其他人"""
+    async with async_session() as db:
+        # 驗證寫入權限（需要 editor 以上）
+        role = await get_member_role(user_id, team_id, db)
+        if role not in ("admin", "editor"):
+            await websocket.send_text(json.dumps({
+                "type": "error", "message": "Requires editor or admin role"
+            }))
+            return
+
+        # 查找或建立 SharedEnvironment
+        result = await db.execute(
+            select(SharedEnvironment).where(SharedEnvironment.team_id == team_id)
+        )
+        env = result.scalar_one_or_none()
+
+        now = datetime.now(timezone.utc)
+
+        if env:
+            env.data = data
+            env.updated_by = user_id
+            env.updated_at = now
+        else:
+            env = SharedEnvironment(
+                team_id=team_id,
+                data=data,
+                updated_by=user_id,
+            )
+            db.add(env)
+
+        await db.commit()
+
+    # 回應發送者：確認成功
+    await websocket.send_text(json.dumps({
+        "type": "env_sync_ok", "timestamp": now.isoformat()
+    }))
+
+    # 廣播給同 team 其他人
+    await manager.broadcast(
+        team_id,
+        {
+            "type": "environment_updated",
+            "data": data,
             "updated_by": user_id,
             "timestamp": now.isoformat(),
         },

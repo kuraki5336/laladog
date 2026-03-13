@@ -151,6 +151,15 @@ export const useSyncStore = defineStore('sync', () => {
           handleRemoteCollectionUpdate(msg)
           break
 
+        case 'environment_updated':
+          // 其他成員更新了環境變數 → 更新本地
+          handleRemoteEnvironmentUpdate(msg)
+          break
+
+        case 'env_sync_ok':
+          console.log('[WS] Environment sync confirmed at', msg.timestamp)
+          break
+
         case 'sync_ok':
           // 自己 push 成功的確認
           console.log('[WS] Sync confirmed at', msg.timestamp)
@@ -195,12 +204,33 @@ export const useSyncStore = defineStore('sync', () => {
     collectionStore.applyRemoteUpdate(msg.data, ws.id)
   }
 
+  /** 處理遠端環境變數更新 */
+  function handleRemoteEnvironmentUpdate(msg: {
+    data: string
+    updated_by: string
+    timestamp: string
+  }) {
+    import('./environmentStore').then(({ useEnvironmentStore }) => {
+      const envStore = useEnvironmentStore()
+      console.log(`[WS] Remote environment update from ${msg.updated_by}`)
+      envStore.applyRemoteUpdate(msg.data)
+    })
+  }
+
   /** 透過 WebSocket 推送 collection 更新，回傳是否成功 */
   function pushViaWs(data: string, name: string): boolean {
     return send({
       type: 'collection_update',
       data,
       name,
+    })
+  }
+
+  /** 透過 WebSocket 推送環境變數更新，回傳是否成功 */
+  function pushEnvViaWs(data: string): boolean {
+    return send({
+      type: 'environment_update',
+      data,
     })
   }
 
@@ -211,5 +241,6 @@ export const useSyncStore = defineStore('sync', () => {
     disconnect,
     send,
     pushViaWs,
+    pushEnvViaWs,
   }
 })

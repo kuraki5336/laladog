@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { useEnvironmentStore } from '@/stores/environmentStore'
 import { parsePostmanEnvironment } from '@/utils/postmanImporter'
 
 const store = useEnvironmentStore()
 const showModal = ref(false)
 const newEnvName = ref('')
-const editingEnvId = ref<string | null>(null)
-const newVarKey = ref('')
-const newVarValue = ref('')
 const envFileInput = ref<HTMLInputElement | null>(null)
 const importError = ref<string | null>(null)
 const importSuccess = ref<string | null>(null)
+
+/** 每個環境各自的新增變數輸入狀態 */
+const newVarInputs = reactive<Record<string, { key: string; value: string }>>({})
+
+function getNewVarInput(envId: string) {
+  if (!newVarInputs[envId]) {
+    newVarInputs[envId] = { key: '', value: '' }
+  }
+  return newVarInputs[envId]
+}
 
 async function addEnvironment() {
   if (!newEnvName.value.trim()) return
@@ -19,11 +26,12 @@ async function addEnvironment() {
   newEnvName.value = ''
 }
 
-async function addVariable() {
-  if (!editingEnvId.value || !newVarKey.value.trim()) return
-  await store.addVariable(editingEnvId.value, newVarKey.value.trim(), newVarValue.value)
-  newVarKey.value = ''
-  newVarValue.value = ''
+async function addVariable(envId: string) {
+  const input = getNewVarInput(envId)
+  if (!input.key.trim()) return
+  await store.addVariable(envId, input.key.trim(), input.value)
+  input.key = ''
+  input.value = ''
 }
 
 function triggerImportEnv() {
@@ -184,20 +192,20 @@ async function handleImportEnv(e: Event) {
           <!-- Add Variable -->
           <div class="mt-2 flex gap-2">
             <input
-              v-model="newVarKey"
+              v-model="getNewVarInput(env.id).key"
               class="flex-1 rounded-sm border border-border px-2 py-1 text-xs outline-none focus:border-border-focus"
               placeholder="Key"
-              @focus="editingEnvId = env.id"
+              @keyup.enter="addVariable(env.id)"
             />
             <input
-              v-model="newVarValue"
+              v-model="getNewVarInput(env.id).value"
               class="flex-1 rounded-sm border border-border px-2 py-1 text-xs outline-none focus:border-border-focus"
               placeholder="Value"
-              @focus="editingEnvId = env.id"
+              @keyup.enter="addVariable(env.id)"
             />
             <button
               class="rounded-sm bg-secondary px-2 py-1 text-xs text-white hover:bg-secondary-60"
-              @click="editingEnvId = env.id; addVariable()"
+              @click="addVariable(env.id)"
             >
               +
             </button>

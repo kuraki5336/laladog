@@ -58,3 +58,15 @@ class SharedCollection(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=True
     )
+
+
+class SharedEnvironment(Base):
+    __tablename__ = "shared_environments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    team_id: Mapped[str] = mapped_column(String, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    data: Mapped[str] = mapped_column(Text, nullable=False, default="[]")  # JSON: [{ id, name, variables }]
+    updated_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=True
+    )

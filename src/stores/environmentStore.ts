@@ -5,6 +5,11 @@ import { useWorkspaceStore } from './workspaceStore'
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__
 
+function isCloudWs(): boolean {
+  const wsStore = useWorkspaceStore()
+  return !!wsStore.activeWorkspace?.teamId
+}
+
 export const useEnvironmentStore = defineStore('environment', () => {
   const environments = ref<Environment[]>([])
   const globalVariables = ref<EnvVariable[]>([])
@@ -66,7 +71,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
     // 其次更新全域變數
     const globalVar = globalVariables.value.find((v) => v.key === key && v.enabled)
     if (globalVar) {
-      if (isTauri) {
+      if (isTauri && !isCloudWs()) {
         const db = await getDb()
         await db.execute('UPDATE global_variables SET value = ? WHERE id = ?', [value, globalVar.id])
       }
@@ -91,8 +96,9 @@ export const useEnvironmentStore = defineStore('environment', () => {
     return await Database.load('sqlite:laladog.db')
   }
 
-  /** 載入當前 workspace 的環境 */
+  /** 載入當前 workspace 的環境（本地 workspace 讀 SQLite，雲端從 pullFromCloud 取得） */
   async function loadAll() {
+    if (isCloudWs()) return // 雲端環境變數由 pullFromCloud 處理
     if (!isTauri) return
     const db = await getDb()
     const wsStore = useWorkspaceStore()
@@ -134,6 +140,12 @@ export const useEnvironmentStore = defineStore('environment', () => {
   /** 新增環境（歸屬當前 workspace） */
   async function addEnvironment(name: string) {
     const id = crypto.randomUUID()
+    if (isCloudWs()) {
+      // 雲端：只改記憶體 + 同步
+      environments.value.push({ id, name, isActive: false, variables: [] })
+      scheduleSyncToCloud()
+      return id
+    }
     const wsStore = useWorkspaceStore()
     const wsId = wsStore.activeWorkspace?.id || null
     if (isTauri) {
@@ -159,6 +171,14 @@ export const useEnvironmentStore = defineStore('environment', () => {
   /** 新增環境變數 */
   async function addVariable(envId: string, key: string, value: string) {
     const id = crypto.randomUUID()
+    if (isCloudWs()) {
+      const env = environments.value.find((e) => e.id === envId)
+      if (env) {
+        env.variables.push({ id, key, value, enabled: true })
+        scheduleSyncToCloud()
+      }
+      return
+    }
     if (isTauri) {
       const db = await getDb()
       await db.execute(
@@ -174,6 +194,19 @@ export const useEnvironmentStore = defineStore('environment', () => {
 
   /** 更新環境變數 */
   async function updateVariable(varId: string, key: string, value: string, enabled: boolean) {
+    if (isCloudWs()) {
+      for (const env of environments.value) {
+        const v = env.variables.find((v) => v.id === varId)
+        if (v) {
+          v.key = key
+          v.value = value
+          v.enabled = enabled
+          break
+        }
+      }
+      scheduleSyncToCloud()
+      return
+    }
     if (isTauri) {
       const db = await getDb()
       await db.execute('UPDATE env_variables SET key = ?, value = ?, enabled = ? WHERE id = ?', [
@@ -196,6 +229,15 @@ export const useEnvironmentStore = defineStore('environment', () => {
 
   /** 刪除環境 */
   async function deleteEnvironment(id: string) {
+    if (isCloudWs()) {
+      environments.value = environments.value.filter((e) => e.id !== id)
+      const wsStore = useWorkspaceStore()
+      if (wsStore.activeWorkspace?.activeEnvironmentId === id) {
+        wsStore.activeWorkspace.activeEnvironmentId = null
+      }
+      scheduleSyncToCloud()
+      return
+    }
     if (isTauri) {
       const db = await getDb()
       await db.execute('DELETE FROM environments WHERE id = ?', [id])
@@ -221,6 +263,162 @@ export const useEnvironmentStore = defineStore('environment', () => {
     return envId
   }
 
+  // ── 雲端同步 ──
+
+  let syncTimer: ReturnType<typeof setTimeout> | null = null
+
+  /** 排程同步到雲端（debounce 1 秒，排程時立即快照資料和 teamId） */
+  function scheduleSyncToCloud() {
+    const wsStore = useWorkspaceStore()
+    const teamId = wsStore.activeWorkspace?.teamId
+    if (!teamId) return
+
+    // 立即快照當前資料，避免 debounce 期間切換 workspace 導致推送錯誤資料
+    const snapshot = serializeEnvironments()
+
+    if (syncTimer) clearTimeout(syncTimer)
+    syncTimer = setTimeout(() => {
+      pushToCloud(teamId, snapshot)
+    }, 1000)
+  }
+
+  /** 序列化所有環境為 JSON */
+  function serializeEnvironments(): string {
+    return JSON.stringify(
+      environments.value.map((e) => ({
+        id: e.id,
+        name: e.name,
+        variables: e.variables.map((v) => ({
+          id: v.id,
+          key: v.key,
+          value: v.value,
+          enabled: v.enabled,
+        })),
+      })),
+    )
+  }
+
+  /** 推送環境變數到雲端（WS 優先，HTTP fallback） */
+  async function pushToCloud(teamId: string, data: string) {
+    try {
+      // 優先走 WebSocket
+      const { useSyncStore } = await import('./syncStore')
+      const syncStore = useSyncStore()
+      if (syncStore.status === 'connected') {
+        const sent = syncStore.pushEnvViaWs(data)
+        if (sent) {
+          console.log('[EnvSync] Pushed via WebSocket')
+          return
+        }
+      }
+
+      // Fallback: HTTP
+      const { apiCall } = await import('@/utils/api')
+      await apiCall('PUT', `/sync/${teamId}/environments`, { data })
+      console.log('[EnvSync] Pushed via HTTP (fallback)')
+    } catch (e) {
+      console.error('[EnvSync] Push to cloud failed:', e)
+    }
+  }
+
+  /** 從雲端拉取環境變數 */
+  async function pullFromCloud(teamId: string) {
+    const { useAuthStore } = await import('./authStore')
+    const authStore = useAuthStore()
+    if (!authStore.isLoggedIn) return
+
+    // 先清空，避免殘留前一個 workspace 的環境變數
+    environments.value = []
+
+    try {
+      const { apiCall } = await import('@/utils/api')
+      const resp = await apiCall('GET', `/sync/${teamId}/environments`)
+      if (resp.status >= 400) {
+        console.error('[EnvSync] Failed to pull from cloud:', resp.body)
+        return
+      }
+
+      const result = JSON.parse(resp.body)
+      if (!result || !result.data) {
+        console.log('[EnvSync] No shared environments on cloud')
+        environments.value = []
+        return
+      }
+
+      const cloudEnvs: Environment[] = JSON.parse(result.data)
+      if (!Array.isArray(cloudEnvs)) return
+
+      environments.value = cloudEnvs.map((e) => ({
+        id: e.id,
+        name: e.name,
+        isActive: false,
+        variables: (e.variables || []).map((v) => ({
+          id: v.id,
+          key: v.key,
+          value: v.value,
+          enabled: v.enabled,
+        })),
+      }))
+
+      console.log(`[EnvSync] Pulled ${cloudEnvs.length} environments from cloud`)
+    } catch (e) {
+      console.error('[EnvSync] Pull from cloud failed:', e)
+    }
+  }
+
+  /** 套用遠端 WebSocket 推送的環境變數更新 */
+  function applyRemoteUpdate(dataJson: string) {
+    try {
+      const cloudEnvs: Environment[] = JSON.parse(dataJson)
+      if (!Array.isArray(cloudEnvs)) return
+
+      environments.value = cloudEnvs.map((e) => ({
+        id: e.id,
+        name: e.name,
+        isActive: false,
+        variables: (e.variables || []).map((v) => ({
+          id: v.id,
+          key: v.key,
+          value: v.value,
+          enabled: v.enabled,
+        })),
+      }))
+
+      console.log(`[EnvSync] Applied remote update: ${cloudEnvs.length} environments`)
+    } catch (e) {
+      console.error('[EnvSync] Failed to apply remote update:', e)
+    }
+  }
+
+  /** 將本地環境變數推上雲端（Share workspace 時使用） */
+  async function pushLocalToCloud(teamId: string) {
+    try {
+      const data = serializeEnvironments()
+      const { apiCall } = await import('@/utils/api')
+      await apiCall('PUT', `/sync/${teamId}/environments`, { data })
+      console.log('[EnvSync] Pushed local environments to cloud')
+    } catch (e) {
+      console.error('[EnvSync] Failed to push local to cloud:', e)
+    }
+  }
+
+  /** 清除本地 SQLite 中的環境資料（Share workspace 後使用） */
+  async function clearLocalEnvironments(workspaceId: string) {
+    if (!isTauri) return
+    try {
+      const db = await getDb()
+      // 先刪變數再刪環境（FK 約束）
+      const envRows = await db.select<any[]>('SELECT id FROM environments WHERE workspace_id = ?', [workspaceId])
+      for (const row of envRows) {
+        await db.execute('DELETE FROM env_variables WHERE environment_id = ?', [row.id])
+      }
+      await db.execute('DELETE FROM environments WHERE workspace_id = ?', [workspaceId])
+      console.log(`[EnvSync] Cleared local environments for workspace ${workspaceId}`)
+    } catch (e) {
+      console.error('[EnvSync] Failed to clear local environments:', e)
+    }
+  }
+
   return {
     environments,
     globalVariables,
@@ -241,5 +439,9 @@ export const useEnvironmentStore = defineStore('environment', () => {
     clearLocalOverride,
     updateSharedValue,
     getVariableSource,
+    pullFromCloud,
+    applyRemoteUpdate,
+    pushLocalToCloud,
+    clearLocalEnvironments,
   }
 })

@@ -95,12 +95,19 @@ watch(
   },
 )
 
-// 監聽 activeWorkspace 切換 → 重載環境 + 斷舊連新
+// 監聽 activeWorkspace 切換 → 重載環境
 watch(
   () => wsStore.activeWorkspace?.id,
-  (newId, oldId) => {
+  async (newId, oldId) => {
     if (newId === oldId) return
-    envStore.loadAll()
+    const teamId = wsStore.activeWorkspace?.teamId
+    if (teamId) {
+      // 雲端 workspace → 從 API 拉取該 team 的環境變數
+      await envStore.pullFromCloud(teamId)
+    } else {
+      // 本地 workspace → 從 SQLite 載入
+      envStore.loadAll()
+    }
   },
 )
 
@@ -121,6 +128,18 @@ async function syncTeamCollections() {
   try {
     await teamStore.loadTeams()
 
+    // loadTeams 失敗時（網路問題、token 過期等），不清理既有雲端 workspace
+    // 延遲 3 秒後重試一次
+    if (teamStore.error) {
+      console.warn('[AppLayout] loadTeams failed, retrying in 3s:', teamStore.error)
+      await new Promise(r => setTimeout(r, 3000))
+      await teamStore.loadTeams()
+      if (teamStore.error) {
+        console.error('[AppLayout] loadTeams retry failed, skipping workspace sync')
+        return
+      }
+    }
+
     // 確保每個 team 在本地都有 workspace（同時清除孤兒 cloud workspace）
     const mapping = await wsStore.ensureTeamWorkspaces(teamStore.teams)
 
@@ -131,9 +150,10 @@ async function syncTeamCollections() {
       await collectionStore.pullFromCloud(teamId, wsId)
     }
 
-    // 建立 WebSocket 連線（對當前 active workspace 的 team）
+    // 只拉取當前 active workspace 的環境變數（切換時由 watch 負責）
     const activeTeamId = wsStore.activeWorkspace?.teamId
     if (activeTeamId) {
+      await envStore.pullFromCloud(activeTeamId)
       syncStore.connect(activeTeamId)
     }
   } catch (e) {
