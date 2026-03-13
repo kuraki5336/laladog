@@ -5,12 +5,6 @@ import { useWorkspaceStore } from './workspaceStore'
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__
 
-/** 當前 workspace 是否為雲端（有 teamId）→ 不寫本地 SQLite */
-function isCloudWs(): boolean {
-  const wsStore = useWorkspaceStore()
-  return !!wsStore.activeWorkspace?.teamId
-}
-
 export const useEnvironmentStore = defineStore('environment', () => {
   const environments = ref<Environment[]>([])
   const globalVariables = ref<EnvVariable[]>([])
@@ -142,7 +136,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
     const id = crypto.randomUUID()
     const wsStore = useWorkspaceStore()
     const wsId = wsStore.activeWorkspace?.id || null
-    if (isTauri && !isCloudWs()) {
+    if (isTauri) {
       const db = await getDb()
       await db.execute('INSERT INTO environments (id, name, workspace_id) VALUES (?, ?, ?)', [id, name, wsId])
     }
@@ -165,7 +159,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
   /** 新增環境變數 */
   async function addVariable(envId: string, key: string, value: string) {
     const id = crypto.randomUUID()
-    if (isTauri && !isCloudWs()) {
+    if (isTauri) {
       const db = await getDb()
       await db.execute(
         'INSERT INTO env_variables (id, environment_id, key, value) VALUES (?, ?, ?, ?)',
@@ -180,7 +174,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
 
   /** 更新環境變數 */
   async function updateVariable(varId: string, key: string, value: string, enabled: boolean) {
-    if (isTauri && !isCloudWs()) {
+    if (isTauri) {
       const db = await getDb()
       await db.execute('UPDATE env_variables SET key = ?, value = ?, enabled = ? WHERE id = ?', [
         key,
@@ -202,7 +196,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
 
   /** 刪除環境 */
   async function deleteEnvironment(id: string) {
-    if (isTauri && !isCloudWs()) {
+    if (isTauri) {
       const db = await getDb()
       await db.execute('DELETE FROM environments WHERE id = ?', [id])
     }

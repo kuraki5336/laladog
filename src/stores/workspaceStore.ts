@@ -16,21 +16,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return await Database.load('sqlite:laladog.db')
   }
 
-  /** 載入所有工作區（僅本地，雲端 workspace 由 ensureTeamWorkspaces 在記憶體建立） */
+  /** 載入所有工作區（含雲端 workspace，供環境變數 FK 使用） */
   async function loadAll() {
     if (!isTauri) return
     const db = await getDb()
-
-    // 一次性清理：移除所有殘留在 DB 中的雲端 workspace（team_id 不為空的）
-    // 雲端 workspace 不該存 DB，登入後從 API 拿即可
-    await db.execute('DELETE FROM workspaces WHERE team_id IS NOT NULL')
 
     const rows = await db.select<any[]>('SELECT * FROM workspaces ORDER BY created_at')
     workspaces.value = rows.map(r => ({
       id: r.id,
       name: r.name,
       isActive: !!r.is_active,
-      teamId: null,
+      teamId: r.team_id || null,
       activeEnvironmentId: r.active_environment_id || null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
@@ -39,14 +35,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   /** 切換啟用的工作區 */
   async function setActive(id: string) {
-    const target = workspaces.value.find(w => w.id === id)
     if (isTauri) {
       const db = await getDb()
       await db.execute('UPDATE workspaces SET is_active = 0')
-      // 雲端 workspace 不存 DB，只更新本地的
-      if (target && !target.teamId) {
-        await db.execute('UPDATE workspaces SET is_active = 1 WHERE id = ?', [id])
-      }
+      await db.execute('UPDATE workspaces SET is_active = 1 WHERE id = ?', [id])
     }
     for (const w of workspaces.value) {
       w.isActive = w.id === id
@@ -97,9 +89,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   /** 刪除工作區（不能刪除最後一個） */
   async function deleteWorkspace(id: string) {
     if (workspaces.value.length <= 1) return false
-    const target = workspaces.value.find(w => w.id === id)
-    // 雲端 workspace 不存 DB，只從記憶體移除
-    if (isTauri && target && !target.teamId) {
+    if (isTauri) {
       const db = await getDb()
       await db.execute('DELETE FROM workspaces WHERE id = ?', [id])
     }
@@ -128,42 +118,73 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ws.activeEnvironmentId = envId
   }
 
-  /** 關聯 workspace 到 team（本地→雲端，從 DB 移除） */
+  /** 關聯 workspace 到 team（本地→雲端） */
   async function linkTeam(workspaceId: string, teamId: string) {
+    const newId = `team-${teamId}`
     if (isTauri) {
-      // 關聯後變成雲端 workspace → 從 DB 移除
       const db = await getDb()
-      await db.execute('DELETE FROM workspaces WHERE id = ?', [workspaceId])
+      // 更新 workspace 的 ID 和 team_id
+      await db.execute('UPDATE workspaces SET id = ?, team_id = ? WHERE id = ?', [newId, teamId, workspaceId])
+      // 同步更新 environments 的 workspace_id
+      await db.execute('UPDATE environments SET workspace_id = ? WHERE workspace_id = ?', [newId, workspaceId])
+      // 同步更新 collection_nodes 的 workspace_id
+      await db.execute('UPDATE collection_nodes SET workspace_id = ? WHERE workspace_id = ?', [newId, workspaceId])
     }
     const ws = workspaces.value.find(w => w.id === workspaceId)
-    if (ws) ws.teamId = teamId
+    if (ws) {
+      ws.id = newId
+      ws.teamId = teamId
+    }
   }
 
   /**
-   * 確保團隊成員在記憶體中有對應的 workspace
-   * 雲端 workspace 只存記憶體、不寫 DB — 登入後從 API 建立，登出即消失
+   * 確保團隊成員有對應的 workspace（穩定 ID：team-{teamId}）
+   * 寫入 SQLite 以支援環境變數 FK；Collections 仍走雲端同步不寫 SQLite
    * 回傳 { teamId → workspaceId } mapping
    */
   async function ensureTeamWorkspaces(
     teams: Array<{ id: string; name: string }>,
   ): Promise<Map<string, string>> {
     const mapping = new Map<string, string>()
+    const currentTeamIds = new Set(teams.map(t => t.id))
 
-    // 先清掉記憶體中舊的雲端 workspace（避免重複）
-    workspaces.value = workspaces.value.filter(w => !w.teamId)
+    // 移除已不存在的 team workspace（被踢出團隊等情況）
+    workspaces.value = workspaces.value.filter(w => !w.teamId || currentTeamIds.has(w.teamId))
 
-    // 為每個 team 建立純記憶體 workspace
     for (const team of teams) {
-      const id = crypto.randomUUID()
-      workspaces.value.push({
-        id,
-        name: team.name,
-        isActive: false,
-        teamId: team.id,
-        activeEnvironmentId: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
+      const id = `team-${team.id}`
+      const existing = workspaces.value.find(w => w.id === id)
+
+      if (existing) {
+        // 更新名稱（團隊名可能改了）
+        existing.teamId = team.id
+        if (existing.name !== team.name) {
+          existing.name = team.name
+          if (isTauri) {
+            const db = await getDb()
+            await db.execute('UPDATE workspaces SET name = ?, team_id = ? WHERE id = ?', [team.name, team.id, id])
+          }
+        }
+      } else {
+        // 新建 workspace
+        if (isTauri) {
+          const db = await getDb()
+          await db.execute(
+            'INSERT OR IGNORE INTO workspaces (id, name, is_active, team_id) VALUES (?, ?, 0, ?)',
+            [id, team.name, team.id],
+          )
+        }
+        workspaces.value.push({
+          id,
+          name: team.name,
+          isActive: false,
+          teamId: team.id,
+          activeEnvironmentId: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+      }
+
       mapping.set(team.id, id)
     }
 

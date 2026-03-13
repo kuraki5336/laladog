@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.1',
+    date: '2026-03-13',
+    changes: [
+      '雲端 workspace 環境變數持久化 — 重啟 app 不再遺失',
+      '雲端 workspace 使用穩定 ID（team-{teamId}），確保環境變數跨 session 保留',
+    ],
+  },
+  {
     version: 'v0.5.0',
     date: '2026-03-13',
     changes: [
