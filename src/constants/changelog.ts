@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.2',
+    date: '2026-03-14',
+    changes: [
+      '雲端環境變數同步 — 新增/修改/刪除環境變數即時同步到雲端（WebSocket + HTTP）',
+      '修復啟動時雲端 workspace 消失的問題（loadTeams 失敗自動重試）',
+      '修復切換 workspace 時環境變數未跟隨切換的問題',
+      '修復環境變數編輯器各環境輸入框互相連動的 bug',
+    ],
+  },
+  {
     version: 'v0.5.1',
     date: '2026-03-13',
     changes: [
