@@ -94,10 +94,14 @@ async function handleInvite() {
 
 async function handleRemove(userId: string) {
   if (!teamId.value) return
+  inviteMsg.value = null
   const ok = await teamStore.removeMember(teamId.value, userId)
   if (ok) {
-    await loadMembers()
+    inviteMsg.value = 'Member removed'
+  } else {
+    inviteMsg.value = teamStore.error || 'Failed to remove'
   }
+  await loadMembers()
 }
 </script>
 
@@ -170,9 +174,9 @@ async function handleRemove(userId: string) {
                   <span v-if="m.status === 'pending'" class="rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-600">pending</span>
                 </div>
                 <button
-                  v-if="isAdmin && m.role !== 'admin'"
+                  v-if="isAdmin && m.email?.toLowerCase() !== authStore.user?.email?.toLowerCase()"
                   class="text-red-400 hover:text-red-600"
-                  title="Remove member"
+                  :title="m.status === 'pending' ? 'Cancel invitation' : 'Remove member'"
                   @click="handleRemove(m.user_id)"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -182,6 +186,11 @@ async function handleRemove(userId: string) {
               </li>
             </ul>
           </div>
+
+          <!-- 操作反饋訊息 -->
+          <p v-if="inviteMsg" class="text-xs" :class="teamStore.error ? 'text-red-500' : 'text-green-600'">
+            {{ inviteMsg }}
+          </p>
 
           <!-- 邀請表單（僅 admin 可見） -->
           <div v-if="isAdmin">
@@ -210,9 +219,6 @@ async function handleRemove(userId: string) {
             >
               {{ inviteLoading ? 'Inviting...' : 'Invite' }}
             </button>
-            <p v-if="inviteMsg" class="mt-1 text-xs" :class="teamStore.error ? 'text-red-500' : 'text-green-600'">
-              {{ inviteMsg }}
-            </p>
           </div>
         </div>
       </div>

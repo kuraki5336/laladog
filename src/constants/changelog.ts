@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.0',
+    date: '2026-03-13',
+    changes: [
+      '修復 Admin 無法取消邀請或移除成員的問題',
+      '移除/取消操作新增反饋訊息提示',
+      'Admin 可移除任何非自己的成員（含 pending 邀請與其他 admin）',
+    ],
+  },
+  {
     version: 'v0.4.9',
     date: '2026-03-13',
     changes: [
