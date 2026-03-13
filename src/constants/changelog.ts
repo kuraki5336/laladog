@@ -6,9 +6,10 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
-    version: 'v0.4.8',
-    date: '2026-03-12',
+    version: 'v0.4.9',
+    date: '2026-03-13',
     changes: [
+      '支援 Postman Export from API 格式的環境變數匯入（外層有 environment 包裝）',
       '修復雲端 workspace 環境變數匯入失敗的問題（外鍵約束衝突）',
     ],
   },

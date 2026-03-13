@@ -175,6 +175,11 @@ export function parsePostmanEnvironment(json: any): {
   name: string
   variables: { key: string; value: string; enabled: boolean }[]
 }[] {
+  // Postman Export from API 格式: { environment: { name, values: [...] } }
+  if (json.environment && json.environment.values) {
+    json = json.environment
+  }
+
   // 單一環境格式: { name, values: [...] }
   if (json.name && json.values) {
     return [{
