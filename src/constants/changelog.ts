@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.3',
+    date: '2026-03-16',
+    changes: [
+      'Payload / Tests / Pre-request Script 編輯器支援 Ctrl+/ 快速切換註解',
+    ],
+  },
+  {
     version: 'v0.5.2',
     date: '2026-03-14',
     changes: [

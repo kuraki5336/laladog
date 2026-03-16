@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import VariablePopover from './VariablePopover.vue'
 
 const model = defineModel<string>({ default: '' })
@@ -112,6 +112,54 @@ function onVarClick() {
   inputRef.value?.focus()
 }
 
+/** Ctrl+/ toggle line comment for multiline textarea */
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === '/' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    const ta = inputRef.value as HTMLTextAreaElement | null
+    if (!ta) return
+
+    const val = ta.value
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+
+    // find affected line range
+    const lineStart = val.lastIndexOf('\n', start - 1) + 1
+    let lineEnd = val.indexOf('\n', end)
+    if (lineEnd === -1) lineEnd = val.length
+
+    const block = val.slice(lineStart, lineEnd)
+    const lines = block.split('\n')
+
+    // check if all non-empty lines are already commented
+    const allCommented = lines.every(l => l.trimStart() === '' || l.trimStart().startsWith('//'))
+
+    const newLines = allCommented
+      ? lines.map(l => {
+          const idx = l.indexOf('//')
+          if (idx === -1) return l
+          // remove first occurrence of "// " or "//"
+          return l.slice(0, idx) + l.slice(idx + (l[idx + 2] === ' ' ? 3 : 2))
+        })
+      : lines.map(l => '// ' + l)
+
+    const newBlock = newLines.join('\n')
+    const before = val.slice(0, lineStart)
+    const after = val.slice(lineEnd)
+    const updated = before + newBlock + after
+
+    model.value = updated
+
+    // restore cursor
+    nextTick(() => {
+      if (!ta) return
+      const delta = newBlock.length - block.length
+      ta.selectionStart = start + (allCommented ? Math.min(0, delta) : 3)
+      ta.selectionEnd = end + delta
+    })
+  }
+}
+
 onBeforeUnmount(() => {
   if (closeTimer) clearTimeout(closeTimer)
 })
@@ -131,6 +179,7 @@ defineExpose({ focus: () => inputRef.value?.focus() })
       :rows="rows"
       :style="hasVars ? 'color: transparent; caret-color: var(--color-text-primary, #333); resize: vertical;' : 'resize: vertical;'"
       @scroll="syncScroll"
+      @keydown="onKeyDown"
     />
     <!-- Single-line input -->
     <input
