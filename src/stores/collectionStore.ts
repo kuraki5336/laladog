@@ -524,6 +524,49 @@ export const useCollectionStore = defineStore('collection', () => {
   }
 
   /** 取得單一 collection 的完整樹狀結構（含 children） */
+  /** 複製節點（含子節點） */
+  async function duplicateNode(id: string) {
+    const source = nodes.value.find((n) => n.id === id)
+    if (!source) return
+
+    const db = isTauri && !isCloudWs() ? await getDb() : null
+
+    async function cloneNode(src: CollectionNode, parentId: string | null, sortOrder: number): Promise<void> {
+      const newId = crypto.randomUUID()
+      const name = parentId === source!.parentId ? `${src.name} (copy)` : src.name
+      const request = src.request ? JSON.parse(JSON.stringify(src.request)) : undefined
+      const workspaceId = src.workspaceId
+
+      if (db) {
+        await db.execute(
+          'INSERT INTO collection_nodes (id, name, node_type, parent_id, sort_order, request_data, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [newId, name, src.type, parentId, sortOrder, request ? JSON.stringify(request) : null, workspaceId],
+        )
+      }
+
+      nodes.value.push({
+        id: newId,
+        name,
+        type: src.type,
+        parentId,
+        sortOrder,
+        workspaceId,
+        request,
+        isExpanded: false,
+      })
+
+      // 遞迴複製子節點
+      const children = nodes.value.filter((n) => n.parentId === src.id).sort((a, b) => a.sortOrder - b.sortOrder)
+      for (let i = 0; i < children.length; i++) {
+        await cloneNode(children[i], newId, i)
+      }
+    }
+
+    const siblings = nodes.value.filter((n) => n.parentId === source.parentId)
+    await cloneNode(source, source.parentId, siblings.length)
+    scheduleSyncToCloud()
+  }
+
   function getCollectionTree(collectionId: string): CollectionNode | null {
     const root = nodes.value.find((n) => n.id === collectionId)
     if (!root) return null
@@ -573,6 +616,7 @@ export const useCollectionStore = defineStore('collection', () => {
     applyRemoteUpdate,
     serializeWorkspaceCollections,
     clearLocalCollections,
+    duplicateNode,
     getCollectionTree,
     getAllCollectionTrees,
   }

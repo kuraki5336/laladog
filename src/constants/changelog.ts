@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.4',
+    date: '2026-03-17',
+    changes: [
+      '側邊欄右鍵選單新增 Duplicate 功能（支援 Request / Folder / Collection 深層複製）',
+    ],
+  },
+  {
     version: 'v0.5.3',
     date: '2026-03-16',
     changes: [

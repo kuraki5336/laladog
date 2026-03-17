@@ -269,6 +269,12 @@ function openContextMenuFromButton(e: MouseEvent) {
         >
           Rename
         </button>
+        <button
+          class="flex w-full items-center px-3 py-1.5 text-left text-xs text-text-primary hover:bg-bg-hover"
+          @click="store.duplicateNode(node.id); showContextMenu = false"
+        >
+          Duplicate
+        </button>
         <div class="my-1 border-t border-border" />
         <button
           class="flex w-full items-center px-3 py-1.5 text-left text-xs text-danger hover:bg-bg-hover"
