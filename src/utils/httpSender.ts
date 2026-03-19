@@ -74,3 +74,37 @@ export async function sendHttp(options: HttpSendOptions): Promise<HttpSendResult
     ? sendViaTauri(options.method, options.url, options.headers, options.body)
     : sendViaFetch(options.method, options.url, options.headers, options.body)
 }
+
+// ─── Multipart form-data（含檔案上傳）───
+
+export interface FormPart {
+  key: string
+  value: string
+  field_type: 'text' | 'file'
+}
+
+export interface MultipartSendOptions {
+  method: string
+  url: string
+  headers: Record<string, string>
+  parts: FormPart[]
+}
+
+export async function sendMultipart(options: MultipartSendOptions): Promise<HttpSendResult> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  const result = await invoke<{
+    status: number; status_text: string; headers: Record<string, string>
+    body: string; duration: number; size: number; body_encoding?: string
+  }>('send_multipart_request', {
+    payload: { method: options.method, url: options.url, headers: options.headers, parts: options.parts },
+  })
+  return {
+    status: result.status,
+    statusText: result.status_text,
+    headers: result.headers,
+    body: result.body,
+    duration: result.duration,
+    size: result.size,
+    bodyEncoding: (result.body_encoding || 'text') as 'text' | 'base64',
+  }
+}

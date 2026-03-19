@@ -51,6 +51,7 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             commands::http::send_http_request,
+            commands::http::send_multipart_request,
             commands::oauth::google_oauth_login,
             commands::api::api_request
         ])

@@ -38,6 +38,8 @@ export interface KeyValuePair {
   value: string
   description?: string
   enabled: boolean
+  /** form-data 專用：text（預設）或 file */
+  fieldType?: 'text' | 'file'
 }
 
 /** 請求 Body */

@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.5',
+    date: '2026-03-19',
+    changes: [
+      'Form-data Body 支援檔案上傳（File 類型欄位，類似 Postman）',
+    ],
+  },
+  {
     version: 'v0.5.4',
     date: '2026-03-17',
     changes: [

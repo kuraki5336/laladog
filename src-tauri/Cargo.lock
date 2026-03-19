@@ -2117,10 +2117,11 @@ dependencies = [
 
 [[package]]
 name = "laladog"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "mime_guess",
  "rand 0.8.5",
  "reqwest 0.12.28",
  "serde",

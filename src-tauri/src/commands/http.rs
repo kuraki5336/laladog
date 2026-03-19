@@ -147,6 +147,89 @@ pub async fn send_http_request(payload: HttpRequestPayload) -> Result<HttpRespon
     Err("Unexpected redirect loop".to_string())
 }
 
+// ─── Multipart form-data 請求 ───
+
+#[derive(Debug, Deserialize)]
+pub struct FormPart {
+    pub key: String,
+    pub value: String,
+    /// "text" 或 "file"
+    pub field_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MultipartRequestPayload {
+    pub method: String,
+    pub url: String,
+    pub headers: HashMap<String, String>,
+    pub parts: Vec<FormPart>,
+}
+
+#[tauri::command]
+pub async fn send_multipart_request(payload: MultipartRequestPayload) -> Result<HttpResponsePayload, String> {
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .redirect(Policy::none())
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // Build headers（排除 Content-Type，multipart 會自動設定含 boundary）
+    let mut header_map = HeaderMap::new();
+    for (key, value) in &payload.headers {
+        if key.to_lowercase() == "content-type" {
+            continue;
+        }
+        let name = HeaderName::from_bytes(key.as_bytes())
+            .map_err(|e| format!("Invalid header name '{}': {}", key, e))?;
+        let val = HeaderValue::from_str(value)
+            .map_err(|e| format!("Invalid header value for '{}': {}", key, e))?;
+        header_map.insert(name, val);
+    }
+
+    let method = payload
+        .method
+        .parse::<reqwest::Method>()
+        .map_err(|e| format!("Invalid HTTP method: {}", e))?;
+
+    // Build multipart form
+    let mut form = reqwest::multipart::Form::new();
+    for part in &payload.parts {
+        if part.field_type == "file" {
+            let path = std::path::Path::new(&part.value);
+            let file_bytes = tokio::fs::read(path)
+                .await
+                .map_err(|e| format!("Failed to read file '{}': {}", part.value, e))?;
+            let file_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("file")
+                .to_string();
+            let mime = mime_guess::from_path(path)
+                .first_or_octet_stream()
+                .to_string();
+            let file_part = reqwest::multipart::Part::bytes(file_bytes)
+                .file_name(file_name)
+                .mime_str(&mime)
+                .map_err(|e| format!("Invalid MIME type: {}", e))?;
+            form = form.part(part.key.clone(), file_part);
+        } else {
+            form = form.text(part.key.clone(), part.value.clone());
+        }
+    }
+
+    let start = Instant::now();
+
+    let response = client
+        .request(method, &payload.url)
+        .headers(header_map)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    build_response(response, start).await
+}
+
 /// 從 reqwest Response 建構回傳結構
 async fn build_response(
     response: reqwest::Response,

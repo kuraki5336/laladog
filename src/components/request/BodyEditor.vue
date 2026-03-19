@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRequestStore } from '@/stores/requestStore'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
+import FormDataEditor from '@/components/common/FormDataEditor.vue'
 import VariableHighlightInput from '@/components/common/VariableHighlightInput.vue'
 
 const store = useRequestStore()
@@ -83,7 +84,7 @@ const rawTypes = ['json', 'xml', 'text'] as const
 
     <!-- Form Data -->
     <div v-else-if="store.activeRequest.body.type === 'form-data'">
-      <KeyValueEditor v-model="store.activeRequest.body.formData!" placeholder-key="Key" placeholder-value="Value" />
+      <FormDataEditor v-model="store.activeRequest.body.formData!" />
     </div>
 
     <!-- URL Encoded -->

@@ -10,7 +10,8 @@ import { useHistoryStore } from './historyStore'
 import { useConsoleStore } from './consoleStore'
 import { useTabStore } from './tabStore'
 import { resolveVariables } from '@/utils/variableResolver'
-import { sendHttp } from '@/utils/httpSender'
+import { sendHttp, sendMultipart } from '@/utils/httpSender'
+import type { FormPart } from '@/utils/httpSender'
 import { createExpect } from '@/utils/scriptAssertions'
 import CryptoJS from 'crypto-js'
 import * as _ from 'lodash-es'
@@ -361,9 +362,8 @@ export const useRequestStore = defineStore('request', () => {
           else resolvedHeaders['Content-Type'] = 'text/plain'
         } else if (tab.request.body.type === 'x-www-form-urlencoded') {
           resolvedHeaders['Content-Type'] = 'application/x-www-form-urlencoded'
-        } else if (tab.request.body.type === 'form-data') {
-          resolvedHeaders['Content-Type'] = 'multipart/form-data'
         }
+        // form-data 不手動設 Content-Type，由 multipart 自動帶 boundary
       }
 
       resolvedBody = null
@@ -377,14 +377,18 @@ export const useRequestStore = defineStore('request', () => {
           }
         }
         resolvedBody = params.toString()
-      } else if (tab.request.body.type === 'form-data') {
-        const formParts = (tab.request.body.formData || [])
+      }
+
+      // form-data 走 multipart 路徑
+      let multipartParts: FormPart[] | null = null
+      if (tab.request.body.type === 'form-data') {
+        multipartParts = (tab.request.body.formData || [])
           .filter((item: any) => item.enabled)
           .map((item: any) => ({
             key: resolveVariables(item.key, vars),
-            value: resolveVariables(item.value, vars),
+            value: item.fieldType === 'file' ? item.value : resolveVariables(item.value, vars),
+            field_type: (item.fieldType || 'text') as 'text' | 'file',
           }))
-        resolvedBody = JSON.stringify(formParts)
       }
 
       // 記錄已解析的請求細節
@@ -392,15 +396,22 @@ export const useRequestStore = defineStore('request', () => {
         method: tab.request.method,
         url: resolvedUrl,
         headers: { ...resolvedHeaders },
-        body: resolvedBody,
+        body: multipartParts ? JSON.stringify(multipartParts) : resolvedBody,
       }
 
-      const result = await sendHttp({
-        method: tab.request.method,
-        url: resolvedUrl,
-        headers: resolvedHeaders,
-        body: resolvedBody,
-      })
+      const result = multipartParts
+        ? await sendMultipart({
+            method: tab.request.method,
+            url: resolvedUrl,
+            headers: resolvedHeaders,
+            parts: multipartParts,
+          })
+        : await sendHttp({
+            method: tab.request.method,
+            url: resolvedUrl,
+            headers: resolvedHeaders,
+            body: resolvedBody,
+          })
 
       tab.response = {
         status: result.status,
