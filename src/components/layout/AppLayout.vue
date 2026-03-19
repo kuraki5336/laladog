@@ -30,6 +30,7 @@ const showAboutDialog = ref(false)
 const showSponsorDialog = ref(false)
 const showUpdateDialog = ref(false)
 const showUserMenu = ref(false)
+let isSyncingTeams = false
 
 /* ── Sidebar resizable ── */
 const sidebarWidth = ref(288)
@@ -125,6 +126,12 @@ watch(
 
 /** 同步所有團隊的 shared collections 到本地 + 建立 WebSocket */
 async function syncTeamCollections() {
+  // 防止同時多次呼叫（onMounted + watch 可能重疊）
+  if (isSyncingTeams) {
+    console.log('[AppLayout] syncTeamCollections already running, skipping')
+    return
+  }
+  isSyncingTeams = true
   try {
     await teamStore.loadTeams()
 
@@ -158,6 +165,8 @@ async function syncTeamCollections() {
     }
   } catch (e) {
     console.error('[AppLayout] Team sync failed:', e)
+  } finally {
+    isSyncingTeams = false
   }
 }
 

@@ -279,15 +279,22 @@ export const useCollectionStore = defineStore('collection', () => {
   /** debounce timer，避免頻繁同步 */
   let syncTimer: ReturnType<typeof setTimeout> | null = null
 
-  /** 排程同步到雲端（debounce 1 秒） */
+  /** 排程同步到雲端（debounce 1 秒）
+   *  在排程當下即快照 teamId / workspaceId，避免 push 時 activeWorkspace 已切換 */
   function scheduleSyncToCloud() {
     const wsStore = useWorkspaceStore()
     const authStore = useAuthStore()
-    if (!wsStore.activeWorkspace?.teamId || !authStore.isLoggedIn) return
+    const activeWs = wsStore.activeWorkspace
+    if (!activeWs?.teamId || !authStore.isLoggedIn) return
+
+    // 快照當前 workspace 資訊
+    const snapshotTeamId = activeWs.teamId
+    const snapshotWsId = activeWs.id
+    const snapshotWsName = activeWs.name
 
     if (syncTimer) clearTimeout(syncTimer)
     syncTimer = setTimeout(() => {
-      pushToCloud()
+      pushToCloud(snapshotTeamId, snapshotWsId, snapshotWsName)
     }, 1000)
   }
 
@@ -326,30 +333,36 @@ export const useCollectionStore = defineStore('collection', () => {
     )
   }
 
-  /** 推送當前 workspace 的 collections 到雲端（優先走 WebSocket，fallback HTTP） */
-  async function pushToCloud() {
+  /** 推送指定 workspace 的 collections 到雲端（優先走 WebSocket，fallback HTTP）
+   *  參數由 scheduleSyncToCloud 快照傳入，避免 push 時 activeWorkspace 已切換 */
+  async function pushToCloud(teamId?: string, workspaceId?: string, workspaceName?: string) {
     const wsStore = useWorkspaceStore()
     const authStore = useAuthStore()
-    const activeWs = wsStore.activeWorkspace
-    if (!activeWs?.teamId || !authStore.isLoggedIn) return
+
+    // 若未傳參數，使用當前 activeWorkspace（向後相容）
+    const tId = teamId || wsStore.activeWorkspace?.teamId
+    const wsId = workspaceId || wsStore.activeWorkspace?.id
+    const wsName = workspaceName || wsStore.activeWorkspace?.name || ''
+
+    if (!tId || !wsId || !authStore.isLoggedIn) return
 
     isSyncing.value = true
     try {
-      const data = serializeWorkspaceCollections(activeWs.id)
+      const data = serializeWorkspaceCollections(wsId)
 
       // 優先走 WebSocket
       const { useSyncStore } = await import('./syncStore')
       const syncStore = useSyncStore()
-      if (syncStore.status === 'connected') {
-        const sent = syncStore.pushViaWs(data, activeWs.name)
+      if (syncStore.status === 'connected' && syncStore.currentTeamId === tId) {
+        const sent = syncStore.pushViaWs(data, wsName)
         if (sent) {
-          console.log('[Sync] Pushed via WebSocket')
+          console.log(`[Sync] Pushed via WebSocket (workspace=${wsName})`)
           return
         }
       }
 
       // Fallback: HTTP
-      const listResp = await apiCall('GET', `/sync/${activeWs.teamId}/collections`)
+      const listResp = await apiCall('GET', `/sync/${tId}/collections`)
       if (listResp.status >= 400) {
         console.error('[Sync] Failed to list shared collections:', listResp.body)
         return
@@ -359,18 +372,18 @@ export const useCollectionStore = defineStore('collection', () => {
 
       if (existing.length > 0) {
         await apiCall('PUT', `/sync/collections/${existing[0].id}`, {
-          team_id: activeWs.teamId,
-          name: activeWs.name,
+          team_id: tId,
+          name: wsName,
           data,
         })
-        console.log('[Sync] Updated via HTTP (fallback)')
+        console.log(`[Sync] Updated via HTTP (workspace=${wsName})`)
       } else {
         await apiCall('POST', '/sync/collections', {
-          team_id: activeWs.teamId,
-          name: activeWs.name,
+          team_id: tId,
+          name: wsName,
           data,
         })
-        console.log('[Sync] Created via HTTP (fallback)')
+        console.log(`[Sync] Created via HTTP (workspace=${wsName})`)
       }
     } catch (e) {
       console.error('[Sync] Push to cloud failed:', e)

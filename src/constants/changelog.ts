@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.6',
+    date: '2026-03-19',
+    changes: [
+      '修復雲端 workspace 切換後會跳回第一個的問題（localStorage 記住選擇）',
+      '修復同步競態條件：防止 syncTeamCollections 重複執行',
+      '修復雲端同步可能推送到錯誤 workspace 的問題（快照 workspace 資訊）',
+    ],
+  },
+  {
     version: 'v0.5.5',
     date: '2026-03-19',
     changes: [

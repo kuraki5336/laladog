@@ -48,6 +48,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     for (const w of workspaces.value) {
       w.isActive = w.id === id
     }
+    // 雲端 workspace 的 active 狀態存 localStorage（不在 SQLite 裡）
+    if (ws?.teamId) {
+      localStorage.setItem('laladog_active_team_id', ws.teamId)
+    } else {
+      localStorage.removeItem('laladog_active_team_id')
+    }
   }
 
   /** 新增工作區 */
@@ -172,6 +178,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           updatedAt: new Date().toISOString(),
         })
         mapping.set(team.id, id)
+      }
+    }
+
+    // 還原上次選中的雲端 workspace（從 localStorage 讀取）
+    const savedTeamId = localStorage.getItem('laladog_active_team_id')
+    if (savedTeamId) {
+      const hasLocalActive = workspaces.value.some(w => w.isActive)
+      // 如果目前 active 的是本地 workspace（或沒有 active），且有上次選中的 team
+      if (!hasLocalActive || !workspaces.value.find(w => w.isActive)?.teamId) {
+        const savedWs = workspaces.value.find(w => w.teamId === savedTeamId)
+        if (savedWs) {
+          for (const w of workspaces.value) {
+            w.isActive = w.id === savedWs.id
+          }
+        }
       }
     }
 
