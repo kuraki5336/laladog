@@ -31,6 +31,7 @@ const showSponsorDialog = ref(false)
 const showUpdateDialog = ref(false)
 const showUserMenu = ref(false)
 let isSyncingTeams = false
+let hasSyncedOnce = false  // 確保 syncTeamCollections 只在啟動時跑一次
 
 /* ── Sidebar resizable ── */
 const sidebarWidth = ref(288)
@@ -66,13 +67,16 @@ const updateInfo = shallowRef<UpdateInfo | null>(null)
 
 onMounted(async () => {
   themeStore.init()
-  authStore.init()
   await wsStore.loadAll()
   await envStore.loadAll()
   await collectionStore.loadAll()
 
+  // init 放在 loadAll 之後，避免 watch(isLoggedIn) 在資料未載入時就觸發 sync
+  authStore.init()
+
   // 已登入 → 同步團隊 collections + 建立 WebSocket
-  if (authStore.isLoggedIn) {
+  // （若 watch 尚未觸發，這裡手動呼叫一次）
+  if (authStore.isLoggedIn && !hasSyncedOnce) {
     await syncTeamCollections()
   }
 
@@ -96,29 +100,23 @@ watch(
   },
 )
 
-// 監聽 activeWorkspace 切換 → 重載環境
+// 監聯 activeWorkspace 切換 → 重載環境 + WebSocket
+// 合併為單一 watch 避免 race condition
 watch(
   () => wsStore.activeWorkspace?.id,
   async (newId, oldId) => {
     if (newId === oldId) return
+    // 啟動同步期間 ensureTeamWorkspaces 會改 active，這裡不要反覆觸發
+    if (isSyncingTeams) return
+
     const teamId = wsStore.activeWorkspace?.teamId
     if (teamId) {
-      // 雲端 workspace → 從 API 拉取該 team 的環境變數
+      // 雲端 workspace → 環境 + WebSocket
       await envStore.pullFromCloud(teamId)
+      syncStore.connect(teamId)
     } else {
-      // 本地 workspace → 從 SQLite 載入
+      // 本地 workspace → 從 SQLite 載入環境，斷開 WebSocket
       envStore.loadAll()
-    }
-  },
-)
-
-watch(
-  () => wsStore.activeWorkspace?.teamId,
-  (newTeamId, oldTeamId) => {
-    if (newTeamId === oldTeamId) return
-    if (newTeamId && authStore.isLoggedIn) {
-      syncStore.connect(newTeamId)
-    } else {
       syncStore.disconnect()
     }
   },
@@ -132,6 +130,7 @@ async function syncTeamCollections() {
     return
   }
   isSyncingTeams = true
+  hasSyncedOnce = true
   try {
     await teamStore.loadTeams()
 
@@ -152,16 +151,20 @@ async function syncTeamCollections() {
 
     if (mapping.size === 0) return
 
-    // 對每個 team workspace 拉取雲端 collections
-    for (const [teamId, wsId] of mapping) {
-      await collectionStore.pullFromCloud(teamId, wsId)
-    }
-
-    // 只拉取當前 active workspace 的環境變數（切換時由 watch 負責）
+    // 優先拉取當前 active workspace 的 collections + 環境
     const activeTeamId = wsStore.activeWorkspace?.teamId
-    if (activeTeamId) {
+    const activeWsId = activeTeamId ? mapping.get(activeTeamId) : null
+
+    if (activeTeamId && activeWsId) {
+      await collectionStore.pullFromCloud(activeTeamId, activeWsId)
       await envStore.pullFromCloud(activeTeamId)
       syncStore.connect(activeTeamId)
+    }
+
+    // 背景拉取其他 team 的 collections（不影響 UI 狀態）
+    for (const [teamId, wsId] of mapping) {
+      if (teamId === activeTeamId) continue // 已拉取
+      await collectionStore.pullFromCloud(teamId, wsId)
     }
   } catch (e) {
     console.error('[AppLayout] Team sync failed:', e)

@@ -397,7 +397,10 @@ export const useCollectionStore = defineStore('collection', () => {
     const authStore = useAuthStore()
     if (!authStore.isLoggedIn) return
 
-    isSyncing.value = true
+    // 只在拉取當前 active workspace 時顯示 syncing 狀態
+    const wsStore = useWorkspaceStore()
+    const isActiveWs = wsStore.activeWorkspace?.id === workspaceId
+    if (isActiveWs) isSyncing.value = true
     try {
       console.log(`[Sync] pullFromCloud: teamId=${teamId}, workspaceId=${workspaceId}`)
       const resp = await apiCall('GET', `/sync/${teamId}/collections`)
@@ -472,7 +475,7 @@ export const useCollectionStore = defineStore('collection', () => {
     } catch (e) {
       console.error('[Sync] Pull from cloud failed:', e)
     } finally {
-      isSyncing.value = false
+      if (isActiveWs) isSyncing.value = false
     }
   }
 

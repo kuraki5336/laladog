@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.7',
+    date: '2026-03-20',
+    changes: [
+      '修復 Response Body 複製格式問題（JSON 自動 pretty-print，含縮排）',
+      '修復啟動時持續顯示 Syncing... 的問題（只在 active workspace 同步時顯示）',
+      '修復切換 workspace 時 WebSocket 反覆連線/斷線的問題',
+      '優化啟動同步：先拉取當前 workspace，再背景同步其他 team',
+    ],
+  },
+  {
     version: 'v0.5.6',
     date: '2026-03-19',
     changes: [

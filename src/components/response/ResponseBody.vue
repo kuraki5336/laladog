@@ -207,8 +207,16 @@ function suggestFilename(): string {
   return `response${ext}`
 }
 
+const copyStatus = ref<'idle' | 'copied'>('idle')
+
 async function copyToClipboard() {
-  await navigator.clipboard.writeText(props.response.body)
+  // JSON 回應 → 複製格式化後的版本（含縮排），非 JSON → 複製原文
+  const text = isJson.value
+    ? JSON.stringify(JSON.parse(props.response.body), null, 2)
+    : props.response.body
+  await navigator.clipboard.writeText(text)
+  copyStatus.value = 'copied'
+  setTimeout(() => { copyStatus.value = 'idle' }, 1500)
 }
 
 async function saveToFile() {
@@ -333,10 +341,11 @@ async function saveToFile() {
         <!-- Copy -->
         <button
           v-if="!isBinary"
-          class="rounded-sm px-2 py-1 text-xs text-text-muted hover:text-text-primary"
+          class="rounded-sm px-2 py-1 text-xs transition-colors"
+          :class="copyStatus === 'copied' ? 'text-success' : 'text-text-muted hover:text-text-primary'"
           @click="copyToClipboard"
         >
-          Copy
+          {{ copyStatus === 'copied' ? 'Copied!' : 'Copy' }}
         </button>
       </div>
     </div>
