@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'v0.5.8',
+    date: '2026-03-20',
+    changes: [
+      '修復啟動時卡在 Syncing 的問題（改為懶載入，只同步當前 workspace）',
+      '其他 team 的 collections 延遲到切換時才拉取，大幅加快啟動速度',
+    ],
+  },
+  {
     version: 'v0.5.7',
     date: '2026-03-20',
     changes: [

@@ -31,7 +31,8 @@ const showSponsorDialog = ref(false)
 const showUpdateDialog = ref(false)
 const showUserMenu = ref(false)
 let isSyncingTeams = false
-let hasSyncedOnce = false  // 確保 syncTeamCollections 只在啟動時跑一次
+let hasSyncedOnce = false
+const pulledTeams = new Set<string>()  // 已拉取過 collections 的 team
 
 /* ── Sidebar resizable ── */
 const sidebarWidth = ref(288)
@@ -100,22 +101,26 @@ watch(
   },
 )
 
-// 監聯 activeWorkspace 切換 → 重載環境 + WebSocket
-// 合併為單一 watch 避免 race condition
+// 監聽 activeWorkspace 切換 → 懶載入 collections + 環境 + WebSocket
 watch(
   () => wsStore.activeWorkspace?.id,
   async (newId, oldId) => {
     if (newId === oldId) return
-    // 啟動同步期間 ensureTeamWorkspaces 會改 active，這裡不要反覆觸發
     if (isSyncingTeams) return
 
-    const teamId = wsStore.activeWorkspace?.teamId
+    const ws = wsStore.activeWorkspace
+    const teamId = ws?.teamId
     if (teamId) {
-      // 雲端 workspace → 環境 + WebSocket
+      // 雲端 workspace → 懶載入 collections（首次切換才拉）
+      const wsId = ws!.id
+      if (!pulledTeams.has(teamId)) {
+        await collectionStore.pullFromCloud(teamId, wsId)
+        pulledTeams.add(teamId)
+      }
       await envStore.pullFromCloud(teamId)
       syncStore.connect(teamId)
     } else {
-      // 本地 workspace → 從 SQLite 載入環境，斷開 WebSocket
+      // 本地 workspace
       envStore.loadAll()
       syncStore.disconnect()
     }
@@ -157,15 +162,11 @@ async function syncTeamCollections() {
 
     if (activeTeamId && activeWsId) {
       await collectionStore.pullFromCloud(activeTeamId, activeWsId)
+      pulledTeams.add(activeTeamId)
       await envStore.pullFromCloud(activeTeamId)
       syncStore.connect(activeTeamId)
     }
-
-    // 背景拉取其他 team 的 collections（不影響 UI 狀態）
-    for (const [teamId, wsId] of mapping) {
-      if (teamId === activeTeamId) continue // 已拉取
-      await collectionStore.pullFromCloud(teamId, wsId)
-    }
+    // 其他 team 的 collections 延遲到使用者切換時才拉取（懶載入）
   } catch (e) {
     console.error('[AppLayout] Team sync failed:', e)
   } finally {
